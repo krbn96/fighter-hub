@@ -1,0 +1,2721 @@
+openapi: 3.0.3
+
+info:
+  title: FIGHTER HUB API
+  version: 1.0.0
+
+servers:
+  - url: /api
+
+paths:
+  /auth/login:
+    post:
+      summary: ログイン
+      description: ユーザーのメールアドレスとパスワードでログインする
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: ユーザーのメールアドレス
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  maxLength: 100
+                  description: ユーザーのパスワード
+                  example: password
+      responses:
+        '200':
+          description: ログイン成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - access_token
+                  - token_type
+                properties:
+                  access_token:
+                    type: string
+                    description: JWTアクセストークン
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  token_type:
+                    type: string
+                    description: トークンの種類
+                    example: Bearer
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /auth/logout:
+    post:
+      summary: ログアウト
+      description: ユーザーをログアウトさせる
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: ログアウト成功
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /users/{id}:
+    get:
+      summary: ユーザー情報取得
+      description: 指定されたIDのユーザー情報を取得する
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ユーザーのID
+      responses:
+        '200':
+          description: ユーザー情報取得成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - name
+                  - characters
+                  - play_time_start
+                  - play_time_end
+                  - message
+                  - created_at
+                  - updated_at
+                properties:
+                  name:
+                    type: string
+                    description: ユーザーの名前
+                    example: John Doe
+                  characters:
+                    type: array
+                    description: 使用キャラクター情報
+                    items:
+                      type: object
+                      required:
+                        - character_id
+                        - rank
+                      properties:
+                        character_id:
+                          type: integer
+                        rank:
+                          type: string
+                        mr:
+                          type: integer
+                          nullable: true
+                  play_time_start:
+                    type: string
+                    description: プレイ開始時間
+                    example: "18:00"
+                  play_time_end:
+                    type: string
+                    description: プレイ終了時間
+                    example: "24:00"
+                  message:
+                    type: string
+                    description: ユーザーのメッセージ
+                    example: Hello, world!
+                  x_id:
+                    type: string
+                    description: X（旧Twitter）のID
+                    example: johndoe123
+                  discord_id:
+                    type: string
+                    description: DiscordのID
+                    example: johndoe#1234
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: 作成日時
+                    example: 2023-01-01T00:00:00Z
+                  updated_at:
+                    type: string
+                    format: date-time
+                    description: 更新日時
+                    example: 2023-01-02T00:00:00Z
+
+        '400':
+          description: 不正なリクエスト
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Bad request
+
+        '404':
+          description: 対象IDのユーザーデータなし
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: User not found
+
+        '500':  
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /users/me: 
+    get:
+      summary: 自分のユーザー情報取得
+      description: ログイン中のユーザー情報を取得する
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: ユーザー情報取得成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - name
+                  - characters
+                  - play_time_start
+                  - play_time_end
+                  - message
+                  - email
+                  - created_at
+                  - updated_at
+                properties:
+                  name:
+                    type: string
+                    description: ユーザーの名前
+                    example: John Doe
+                  characters:
+                    type: array
+                    description: 使用キャラクター情報
+                    items:
+                      type: object
+                      required:
+                        - character_id
+                        - rank
+                      properties:
+                        character_id:
+                          type: integer
+                        rank:
+                          type: string
+                        mr:
+                          type: integer
+                  play_time_start:
+                    type: string
+                    description: プレイ開始時間
+                    example: "18:00"
+                  play_time_end:
+                    type: string
+                    description: プレイ終了時間
+                    example: "24:00"
+                  message:
+                    type: string
+                    description: ユーザーのメッセージ
+                    example: Hello, world!
+                  email:
+                    type: string 
+                    format: email
+                    description: ユーザーのメールアドレス
+                    example: "user@example.com" 
+                  x_id:
+                    type: string
+                    description: X（旧Twitter）のID
+                    example: johndoe123
+                  discord_id:
+                    type: string
+                    description: DiscordのID
+                    example: johndoe#1234
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: 作成日時
+                    example: 2023-01-01T00:00:00Z
+                  updated_at:
+                    type: string
+                    format: date-time
+                    description: 更新日時
+                    example: 2023-01-02T00:00:00Z
+
+        '401':
+          description: 認証エラー（ログインしていない）
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+    patch:
+      summary: 自分のユーザー情報更新
+      description: ログイン中のユーザー情報を更新する
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: ユーザーのメールアドレス
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  maxLength: 100
+                  description: ユーザーのパスワード
+                  example: password
+                name:
+                  type: string
+                  maxLength: 50
+                  description: ユーザーの名前
+                  example: John Doe
+                characters:
+                  type: array
+                  description: 使用キャラクター情報
+                  items:
+                    type: object
+                    required:
+                      - character_id
+                      - rank
+                    properties:
+                      character_id:
+                        type: integer
+                        description: キャラクターID
+                        example: 1
+                      rank:
+                        type: string
+                        description: キャラクターのランク
+                        example: Master
+                      mr:
+                        type: integer
+                        description: Master以上の場合のMR
+                        example: 1800
+                play_time_start:
+                  type: string
+                  description: プレイ開始時間
+                  example: "18:00"
+                play_time_end:
+                  type: string
+                  description: プレイ終了時間
+                  example: "24:00"
+                message:
+                  type: string
+                  description: ユーザーのメッセージ
+                  example: Hello, world!
+                x_id:
+                  type: string
+                  description: X（旧Twitter）のID
+                  example: johndoe123
+                discord_id:
+                  type: string
+                  description: DiscordのID
+                  example: johndoe#1234
+      responses:
+        '204':
+          description: ユーザー情報更新成功
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '409':
+          description: データが競合
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Email already exists
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /users:
+    post:
+      summary: ユーザー登録
+      description: 新しいユーザーを登録する
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - name
+                - characters
+                - play_time_start
+                - play_time_end
+                - message
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: ユーザーのメールアドレス
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  maxLength: 100
+                  description: ユーザーのパスワード
+                  example: password
+                name:
+                  type: string
+                  maxLength: 50
+                  description: ユーザーの名前
+                  example: John Doe
+                characters:
+                  type: array
+                  description: 使用キャラクター情報
+                  items:
+                    type: object
+                    required:
+                      - character_id
+                      - rank
+                    properties:
+                      character_id:
+                        type: integer
+                        description: キャラクターID
+                        example: 1
+                      rank:
+                        type: string
+                        description: キャラクターのランク
+                        example: Master
+                      mr:
+                        type: integer
+                        description: Master以上の場合のMR
+                        example: 1800
+                play_time_start:
+                  type: string
+                  description: プレイ開始時間
+                  example: "18:00"
+                play_time_end:
+                  type: string
+                  description: プレイ終了時間
+                  example: "24:00"
+                message:
+                  type: string
+                  description: ユーザーのメッセージ
+                  example: Hello, world!
+      responses:
+        '201':
+          description: ユーザー登録成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                properties:
+                  id:
+                    type: integer
+                    description: 登録されたユーザーのID
+                    example: 123
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '409':
+          description: データが競合
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Email already exists
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /teams:
+    get:
+      summary: チーム検索・一覧取得
+      description: 条件を指定してチームを検索・取得する
+      parameters:
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: チーム名
+          example: FIGHTER TEAM
+
+        - name: tournament_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 大会ID
+          example: 1
+
+        - name: recruitment
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: メンバー募集中かどうか
+          example: true
+
+        - name: rank
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 必要ランク
+          example: Master
+
+        - name: character_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 募集キャラクターID
+          example: 1
+
+      responses:
+        '200':
+          description: チーム一覧取得成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - id
+                    - tournament_id
+                    - name
+                    - description
+                    - max_members
+                    - rank_requirement
+                    - character_requirements
+                    - recruitment_message
+                    - created_at
+                    - updated_at
+                  properties:
+                    id:
+                      type: integer
+                      description: チームID
+                      example: 1
+                    tournament_id:
+                      type: integer
+                      description: 大会ID
+                      example: 1
+                    name:
+                      type: string
+                      description: チーム名
+                      example: FIGHTER TEAM
+                    description:
+                      type: string
+                      description: チームの説明
+                      example: 楽しく大会に参加できるメンバーを募集しています
+                    max_members:
+                      type: integer
+                      description: チームの最大メンバー数
+                      example: 3
+                    rank_requirement:
+                      type: string
+                      description: 参加に必要なランク
+                      example: Master
+                    character_requirements:
+                      type: array
+                      description: 募集キャラクターID
+                      items:
+                        type: integer
+                      example:
+                        - 1
+                        - 2
+                    recruitment_message:
+                      type: string
+                      description: 募集メッセージ
+                      example: 一緒に大会に参加しましょう！
+                    created_at:
+                      type: string
+                      format: date-time
+                      description: 作成日時
+                      example: 2023-01-01T00:00:00Z
+                    updated_at:
+                      type: string
+                      format: date-time
+                      description: 更新日時
+                      example: 2023-01-02T00:00:00Z
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+    post:
+      summary: チーム作成
+      description: 新しいチームを作成する
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tournament_id
+                - name
+                - description
+                - max_members
+                - rank_requirement
+                - character_requirements
+                - recruitment_message
+              properties:
+                tournament_id:
+                  type: integer
+                  description: 大会ID
+                  example: 1
+                name:
+                  type: string
+                  description: チーム名
+                  example: FIGHTER TEAM
+                description:
+                  type: string
+                  description: チームの説明
+                  example: 楽しく大会に参加できるメンバーを募集しています
+                max_members:
+                  type: integer
+                  description: チームの最大メンバー数
+                  example: 3
+                rank_requirement:
+                  type: string
+                  description: 参加に必要なランク
+                  example: Master
+                character_requirements:
+                  type: array
+                  description: 募集キャラクターID
+                  items:
+                    type: integer
+                  example:
+                    - 1
+                    - 2
+                recruitment_message:
+                  type: string
+                  description: 募集メッセージ
+                  example: 一緒に大会に参加しましょう！
+      responses:
+        '201':
+          description: チーム作成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                properties:
+                  id:
+                    type: integer
+                    description: 作成されたチームのID
+                    example: 1
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '409':
+          description: データが競合
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Conflict
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /teams/{id}:
+    get:
+      summary: チーム詳細取得
+      description: 指定されたIDのチーム情報を取得する
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: チームID
+          example: 1
+
+      responses:
+        '200':
+          description: チーム情報取得成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - tournament_id
+                  - name
+                  - description
+                  - max_members
+                  - rank_requirement
+                  - character_requirements
+                  - recruitment_message
+                  - created_at
+                  - updated_at
+                properties:
+                  id:
+                    type: integer
+                    description: チームID
+                    example: 1
+                  tournament_id:
+                    type: integer
+                    description: 大会ID
+                    example: 1
+                  name:
+                    type: string
+                    description: チーム名
+                    example: FIGHTER TEAM
+                  description:
+                    type: string
+                    description: チームの説明
+                    example: 楽しく大会に参加できるメンバーを募集しています
+                  max_members:
+                    type: integer
+                    description: チームの最大メンバー数
+                    example: 3
+                  rank_requirement:
+                    type: string
+                    description: 参加に必要なランク
+                    example: Master
+                  character_requirements:
+                    type: array
+                    description: 募集キャラクターID
+                    items:
+                      type: integer
+                    example:
+                      - 1
+                      - 2
+                  recruitment_message:
+                    type: string
+                    description: 募集メッセージ
+                    example: 一緒に大会に参加しましょう！
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: 作成日時
+                    example: 2023-01-01T00:00:00Z
+                  updated_at:
+                    type: string
+                    format: date-time
+                    description: 更新日時
+                    example: 2023-01-02T00:00:00Z
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '404':
+          description: 対象IDのチームデータなし
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Team not found
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+    patch:
+      summary: チーム情報更新
+      description: 指定されたチームの情報を更新する
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: チームID
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: チーム名
+                  example: FIGHTER TEAM
+                description:
+                  type: string
+                  description: チームの説明
+                  example: 楽しく大会に参加できるメンバーを募集しています
+                rank_requirement:
+                  type: string
+                  description: 参加に必要なランク
+                  example: Master
+                character_requirements:
+                  type: array
+                  description: 募集キャラクターID
+                  items:
+                    type: integer
+                  example:
+                    - 1
+                    - 2
+                recruitment_message:
+                  type: string
+                  description: 募集メッセージ
+                  example: 一緒に大会に参加しましょう！
+      responses:
+        '204':
+          description: チーム情報更新成功
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '403':
+          description: 権限がない
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Forbidden
+
+        '404':
+          description: 対象IDのチームデータなし
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Team not found
+
+        '409':
+          description: データが競合
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Conflict
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /teams/my:
+    get:
+      summary: 自分のチーム一覧取得
+      description: ログイン中のユーザーが所属しているチーム一覧を取得する
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: チーム一覧取得成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - id
+                    - tournament_id
+                    - name
+                    - description
+                    - max_members
+                    - rank_requirement
+                    - character_requirements
+                    - recruitment_message
+                    - created_at
+                    - updated_at
+                  properties:
+                    id:
+                      type: integer
+                      description: チームID
+                      example: 1
+                    tournament_id:
+                      type: integer
+                      description: 大会ID
+                      example: 1
+                    name:
+                      type: string
+                      description: チーム名
+                      example: FIGHTER TEAM
+                    description:
+                      type: string
+                      description: チームの説明
+                      example: 楽しく大会に参加できるメンバーを募集しています
+                    max_members:
+                      type: integer
+                      description: チームの最大メンバー数
+                      example: 3
+                    rank_requirement:
+                      type: string
+                      description: 参加に必要なランク
+                      example: Master
+                    character_requirements:
+                      type: array
+                      description: 募集キャラクターID
+                      items:
+                        type: integer
+                      example:
+                        - 1
+                        - 2
+                    recruitment_message:
+                      type: string
+                      description: 募集メッセージ
+                      example: 一緒に大会に参加しましょう！
+                    created_at:
+                      type: string
+                      format: date-time
+                      description: 作成日時
+                      example: 2023-01-01T00:00:00Z
+                    updated_at:
+                      type: string
+                      format: date-time
+                      description: 更新日時
+                      example: 2023-01-02T00:00:00Z
+
+        '401':
+          description: 認証エラー（ログインしていない）
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /teams/{id}/members:
+    post:
+      summary: チームメンバー追加
+      description: 指定されたチームにメンバーを追加する
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: チームID
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: integer
+                  description: 追加するユーザーのID
+                  example: 123
+      responses:
+        '201':
+          description: チームメンバー追加成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                properties:
+                  id:
+                    type: integer
+                    description: 追加されたチームメンバーのID
+                    example: 1
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '403':
+          description: 権限がない
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Forbidden
+
+        '404':
+          description: 対象のチームまたはユーザーが存在しない
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Team or user not found
+
+        '409':
+          description: データが競合
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Conflict
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /teams/{id}/members/{userId}:
+    delete:
+      summary: チームメンバー削除
+      description: 指定されたチームからメンバーを削除する
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: チームID
+          example: 1
+
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 削除するユーザーのID
+          example: 123
+
+      responses:
+        '204':
+          description: チームメンバー削除成功
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '403':
+          description: 権限がない
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Forbidden
+
+        '404':
+          description: 対象のチームまたはユーザーが存在しない
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Team or user not found
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /tournaments:
+    get:
+      summary: 大会一覧取得
+      description: 大会一覧を取得する
+      parameters:
+        - name: tournament_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 大会ID
+          example: 1
+
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 大会名
+          example: STREET FIGHTER 6 CUP
+
+        - name: start_at
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: 大会開始日時
+          example: 2026-10-01T19:00:00Z
+
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 大会ステータス
+          example: OPEN
+
+      responses:
+        '200':
+          description: 大会一覧取得成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - id
+                    - name
+                    - description
+                    - start_at
+                    - team_size
+                    - max_players
+                    - status
+                    - created_at
+                    - updated_at
+                  properties:
+                    id:
+                      type: integer
+                      description: 大会ID
+                      example: 1
+                    name:
+                      type: string
+                      description: 大会名
+                      example: STREET FIGHTER 6 CUP
+                    description:
+                      type: string
+                      description: 大会の説明
+                      example: Street Fighter 6の3on3大会です
+                    start_at:
+                      type: string
+                      format: date-time
+                      description: 大会開始日時
+                      example: 2026-10-01T19:00:00Z
+                    team_size:
+                      type: integer
+                      description: 1チームあたりの人数
+                      example: 3
+                    max_players:
+                      type: integer
+                      description: 大会の最大参加人数
+                      example: 64
+                    status:
+                      type: string
+                      description: 大会ステータス
+                      example: OPEN
+                    created_at:
+                      type: string
+                      format: date-time
+                      description: 作成日時
+                      example: 2026-09-01T00:00:00Z
+                    updated_at:
+                      type: string
+                      format: date-time
+                      description: 更新日時
+                      example: 2026-09-02T00:00:00Z
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+    post:
+      summary: 大会作成
+      description: 新しい大会を作成する
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - description
+                - start_at
+                - team_size
+                - max_players
+              properties:
+                name:
+                  type: string
+                  description: 大会名
+                  example: STREET FIGHTER 6 CUP
+                description:
+                  type: string
+                  description: 大会の説明
+                  example: Street Fighter 6の3on3大会です
+                start_at:
+                  type: string
+                  format: date-time
+                  description: 大会開始日時
+                  example: 2026-10-01T19:00:00Z
+                team_size:
+                  type: integer
+                  description: 1チームあたりの人数
+                  example: 3
+                max_players:
+                  type: integer
+                  description: 大会の最大参加人数
+                  example: 64
+
+      responses:
+        '201':
+          description: 大会作成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                properties:
+                  id:
+                    type: integer
+                    description: 作成された大会のID
+                    example: 1
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '403':
+          description: 権限がない
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Forbidden
+
+        '409':
+          description: データが競合
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Conflict
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+ 
+  /tournaments/{id}:
+    get:
+      summary: 大会詳細取得
+      description: 指定されたIDの大会情報を取得する
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 大会ID
+          example: 1
+
+      responses:
+        '200':
+          description: 大会情報取得成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - name
+                  - description
+                  - start_at
+                  - team_size
+                  - max_players
+                  - status
+                  - created_at
+                  - updated_at
+                properties:
+                  id:
+                    type: integer
+                    description: 大会ID
+                    example: 1
+                  name:
+                    type: string
+                    description: 大会名
+                    example: STREET FIGHTER 6 CUP
+                  description:
+                    type: string
+                    description: 大会の説明
+                    example: Street Fighter 6の3on3大会です
+                  start_at:
+                    type: string
+                    format: date-time
+                    description: 大会開始日時
+                    example: 2026-10-01T19:00:00Z
+                  team_size:
+                    type: integer
+                    description: 1チームあたりの人数
+                    example: 3
+                  max_players:
+                    type: integer
+                    description: 大会の最大参加人数
+                    example: 64
+                  status:
+                    type: string
+                    description: 大会ステータス
+                    example: OPEN
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: 作成日時
+                    example: 2026-09-01T00:00:00Z
+                  updated_at:
+                    type: string
+                    format: date-time
+                    description: 更新日時
+                    example: 2026-09-02T00:00:00Z
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '404':
+          description: 対象IDの大会データなし
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Tournament not found
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+    patch:
+      summary: 大会情報更新
+      description: 指定された大会の情報を更新する
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 大会ID
+          example: 1
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: 大会名
+                  example: STREET FIGHTER 6 CUP
+                description:
+                  type: string
+                  description: 大会の説明
+                  example: Street Fighter 6の3on3大会です
+                start_at:
+                  type: string
+                  format: date-time
+                  description: 大会開始日時
+                  example: 2026-10-01T19:00:00Z
+                team_size:
+                  type: integer
+                  description: 1チームあたりの人数
+                  example: 3
+                max_players:
+                  type: integer
+                  description: 大会の最大参加人数
+                  example: 64
+                status:
+                  type: string
+                  description: 大会ステータス
+                  example: OPEN
+
+      responses:
+        '204':
+          description: 大会情報更新成功
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '403':
+          description: 権限がない
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Forbidden
+
+        '404':
+          description: 対象IDの大会データなし
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Tournament not found
+
+        '409':
+          description: データが競合
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Conflict
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+    delete:
+      summary: 大会削除
+      description: 指定されたIDの大会を削除する
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 大会ID
+          example: 1
+
+      responses:
+        '204':
+          description: 大会削除成功
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '403':
+          description: 権限がない
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Forbidden
+
+        '404':
+          description: 対象IDの大会データなし
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Tournament not found
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /applications:
+    get:
+      summary: 加入申請一覧取得
+      description: 管理しているチームへの加入申請一覧を取得する
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: application_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 加入申請ID
+          example: 1
+
+        - name: team_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: チームID
+          example: 1
+
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: 申請ユーザーID
+          example: 10
+
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 申請ステータス
+          example: PENDING
+
+      responses:
+        '200':
+          description: 加入申請一覧取得成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - id
+                    - team_id
+                    - user_id
+                    - message
+                    - status
+                    - created_at
+                    - updated_at
+                  properties:
+                    id:
+                      type: integer
+                      description: 加入申請ID
+                      example: 1
+                    team_id:
+                      type: integer
+                      description: チームID
+                      example: 1
+                    user_id:
+                      type: integer
+                      description: 申請ユーザーID
+                      example: 10
+                    message:
+                      type: string
+                      description: 申請メッセージ
+                      example: 一緒に大会に参加したいです！
+                    status:
+                      type: string
+                      description: 申請ステータス
+                      example: PENDING
+                    created_at:
+                      type: string
+                      format: date-time
+                      description: 申請日時
+                      example: 2026-09-01T12:00:00Z
+                    updated_at:
+                      type: string
+                      format: date-time
+                      description: 更新日時
+                      example: 2026-09-01T12:00:00Z
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '403':
+          description: 権限がない
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Forbidden
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /applications/{id}:
+    get:
+      summary: 加入申請詳細取得
+      description: 指定されたIDの加入申請情報を取得する
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 加入申請ID
+          example: 1
+
+      responses:
+        '200':
+          description: 加入申請情報取得成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - team_id
+                  - user_id
+                  - message
+                  - status
+                  - created_at
+                  - updated_at
+                properties:
+                  id:
+                    type: integer
+                    description: 加入申請ID
+                    example: 1
+                  team_id:
+                    type: integer
+                    description: チームID
+                    example: 1
+                  user_id:
+                    type: integer
+                    description: 申請ユーザーID
+                    example: 10
+                  message:
+                    type: string
+                    description: 申請メッセージ
+                    example: 一緒に大会に参加したいです！
+                  status:
+                    type: string
+                    description: 申請ステータス
+                    example: PENDING
+                  created_at:
+                    type: string
+                    format: date-time
+                    description: 申請日時
+                    example: 2026-09-01T12:00:00Z
+                  updated_at:
+                    type: string
+                    format: date-time
+                    description: 更新日時
+                    example: 2026-09-01T12:00:00Z
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '403':
+          description: 権限がない
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Forbidden
+
+        '404':
+          description: 対象IDの加入申請データなし
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Application not found
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+    patch:
+      summary: 加入申請更新
+      description: 指定されたIDの加入申請を更新する
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 加入申請ID
+          example: 1
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  description: 申請ステータス
+                  enum:
+                    - APPROVED
+                    - REJECTED
+                  example: APPROVED
+
+      responses:
+        '204':
+          description: 加入申請更新成功
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '403':
+          description: 権限がない
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Forbidden
+
+        '404':
+          description: 対象IDの加入申請データなし
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Application not found
+
+        '409':
+          description: データが競合
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Conflict
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+    delete:
+      summary: 加入申請削除
+      description: 指定されたIDの加入申請を削除する
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: 加入申請ID
+          example: 1
+
+      responses:
+        '204':
+          description: 加入申請削除成功
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '403':
+          description: 権限がない
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Forbidden
+
+        '404':
+          description: 対象IDの加入申請データなし
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Application not found
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /teams/{id}/applications:
+    post:
+      summary: 加入申請作成
+      description: 指定されたチームへの加入申請を作成する
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: チームID
+          example: 1
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - message
+              properties:
+                message:
+                  type: string
+                  description: 申請メッセージ
+                  example: 一緒に大会に参加したいです！
+
+      responses:
+        '201':
+          description: 加入申請作成成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                properties:
+                  id:
+                    type: integer
+                    description: 作成された加入申請ID
+                    example: 1
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '401':
+          description: 認証エラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Unauthorized
+
+        '404':
+          description: 対象IDのチームデータなし
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Team not found
+
+        '409':
+          description: データが競合
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Conflict
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+  /characters:
+    get:
+      summary: キャラクター一覧取得
+      description: キャラクター一覧を取得する
+      parameters:
+        - name: character_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: キャラクターID
+          example: 1
+
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: キャラクター名
+          example: Ryu
+
+      responses:
+        '200':
+          description: キャラクター一覧取得成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - id
+                    - name
+                  properties:
+                    id:
+                      type: integer
+                      description: キャラクターID
+                      example: 1
+                    name:
+                      type: string
+                      description: キャラクター名
+                      example: Ryu
+
+        '400':
+          description: リクエストが不正
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Invalid request
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - error
+                properties:
+                  error:
+                    type: string
+                    description: エラーメッセージ
+                    example: Internal server error
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
