@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: fighter-hub-postgres
+    environment:
+      POSTGRES_DB: fighter_hub
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - fighter-hub-postgres-data:/var/lib/postgresql
+
+volumes:
+  fighter-hub-postgres-data:
