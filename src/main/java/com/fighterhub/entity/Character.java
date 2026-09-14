@@ -18,6 +18,14 @@ public class Character {
     @Column(nullable = false)
     private String name;
 
+    protected Character() {
+    }
+
+    public Character(Long id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
     public Long getId() {
         return id;
     }
