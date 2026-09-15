@@ -3,6 +3,7 @@ package com.fighterhub.service;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.fighterhub.dto.CharacterResponse;
 import com.fighterhub.exception.CharacterNotFoundException;
@@ -17,6 +18,7 @@ public class CharacterService {
         this.characterRepository = characterRepository;
     }
 
+    @Transactional(readOnly = true)
     public List<CharacterResponse> findAll() {
         return characterRepository.findAll()
                 .stream()
@@ -27,12 +29,13 @@ public class CharacterService {
                 .toList();
     }
 
-    public CharacterResponse findById(Long id) {
-    return characterRepository.findById(id)
-            .map(character -> new CharacterResponse(
-                    character.getId(),
-                    character.getName()
-            ))
-            .orElseThrow(() -> new CharacterNotFoundException(id));
-    }
+        @Transactional(readOnly = true)
+        public CharacterResponse findById(Long id) {
+                return characterRepository.findById(id)
+                        .map(character -> new CharacterResponse(
+                                character.getId(),
+                                character.getName()
+                        ))
+                        .orElseThrow(() -> new CharacterNotFoundException(id));
+        }
 }
