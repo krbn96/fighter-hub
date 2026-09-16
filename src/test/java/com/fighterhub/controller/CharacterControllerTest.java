@@ -75,4 +75,29 @@ class CharacterControllerTest {
                 .andExpect(jsonPath("$[1].id").value(2))
                 .andExpect(jsonPath("$[1].name").value("Ken"));
     }
+
+    @Test
+    void findById_IDの形式が不正な場合_400を返す() throws Exception {
+
+        mockMvc.perform(get("/api/characters/abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Invalid value for 'id'."))
+                .andExpect(jsonPath("$.path").value("/api/characters/abc"));
+    }
+
+    @Test
+    void findById_予期しない例外が発生した場合_500を返す() throws Exception {
+
+        when(characterService.findById(1L))
+                .thenThrow(new RuntimeException("Database connection failed"));
+
+        mockMvc.perform(get("/api/characters/1"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.error").value("Internal Server Error"))
+                .andExpect(jsonPath("$.message").value("An unexpected error occurred."))
+                .andExpect(jsonPath("$.path").value("/api/characters/1"));
+    }
 }

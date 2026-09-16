@@ -50,6 +50,13 @@ public class CharacterController {
             description = "取得成功"
         ),
         @ApiResponse(
+            responseCode = "400",
+            description = "IDの形式が不正",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
             responseCode = "404",
             description = "指定したキャラクターが存在しない",
             content = @Content(
