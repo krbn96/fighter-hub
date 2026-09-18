@@ -182,6 +182,7 @@ paths:
                       properties:
                         character_id:
                           type: integer
+                          format: int64
                         rank:
                           type: string
                         mr:
@@ -223,42 +224,39 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Bad request
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-18T12:00:00"
+                status: 400
+                error: Bad Request
+                message: "Invalid value for 'id'."
+                path: /api/users/abc
 
         '404':
           description: 対象IDのユーザーデータなし
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: User not found
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-18T12:00:00"
+                status: 404
+                error: Not Found
+                message: "User not found. id=999"
+                path: /api/users/999
 
-        '500':  
+        '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-18T12:00:00"
+                status: 500
+                error: Internal Server Error
+                message: "An unexpected error occurred."
+                path: /api/users/1
 
   /users/me: 
     get:

@@ -7,12 +7,16 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -24,9 +28,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fighterhub.config.SecurityConfig;
+import com.fighterhub.dto.UserCharacterResponse;
 import com.fighterhub.dto.UserCreateRequest;
 import com.fighterhub.dto.UserCreateResponse;
+import com.fighterhub.dto.UserPublicResponse;
 import com.fighterhub.exception.EmailAlreadyExistsException;
+import com.fighterhub.exception.UserNotFoundException;
 import com.fighterhub.service.UserService;
 
 @WebMvcTest(UserController.class)
@@ -237,5 +244,67 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.path").value("/api/users"));
 
         verify(userService, never()).createUser(any());
+    }
+
+    @Test
+    void findById_未認証で存在するuserIdを指定した場合_200とUserPublicResponseを返す() throws Exception {
+
+        UserCharacterResponse characterResponse = new UserCharacterResponse(1L, "MASTER", 1600);
+
+        UserPublicResponse response = new UserPublicResponse(
+                1L,
+                "Test User",
+                List.of(characterResponse),
+                LocalTime.of(20, 0),
+                LocalTime.of(23, 30),
+                "よろしくお願いします",
+                "testxid",
+                "test#1234",
+                LocalDateTime.of(2026, 1, 1, 0, 0),
+                LocalDateTime.of(2026, 1, 2, 0, 0)
+        );
+
+        when(userService.findById(1L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/users/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.name").value("Test User"))
+                .andExpect(jsonPath("$.characters[0].characterId").value(1))
+                .andExpect(jsonPath("$.characters[0].rank").value("MASTER"))
+                .andExpect(jsonPath("$.characters[0].mr").value(1600))
+                .andExpect(jsonPath("$.playTimeStart").exists())
+                .andExpect(jsonPath("$.playTimeEnd").exists())
+                .andExpect(jsonPath("$.message").value("よろしくお願いします"))
+                .andExpect(jsonPath("$.xId").value("testxid"))
+                .andExpect(jsonPath("$.discordId").value("test#1234"))
+                .andExpect(jsonPath("$.createdAt").exists())
+                .andExpect(jsonPath("$.updatedAt").exists())
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.passwordHash").doesNotExist())
+                .andExpect(jsonPath("$.deleteFlag").doesNotExist());
+    }
+
+    @Test
+    void findById_UserServiceがUserNotFoundExceptionを投げた場合_404を返す() throws Exception {
+
+        when(userService.findById(999L)).thenThrow(new UserNotFoundException(999L));
+
+        mockMvc.perform(get("/api/users/999"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message").value("User not found. id=999"))
+                .andExpect(jsonPath("$.path").value("/api/users/999"));
+    }
+
+    @Test
+    void findById_未認証でGET_apiUsersMeを送信した場合_数値ID用permitAllにマッチせず認証を要求される() throws Exception {
+
+        mockMvc.perform(get("/api/users/me"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
+
+        verify(userService, never()).findById(any());
     }
 }
