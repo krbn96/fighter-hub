@@ -15,6 +15,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 @Entity
 @Table(name = "t_users")
@@ -99,7 +100,63 @@ public class User {
     @Column(name = "delete_flag", nullable = false)
     private boolean deleteFlag = false;
 
+    public record CharacterAssignment(
+            Character character,
+            String rank,
+            Integer mr) {
+    }
+
     protected User() {
+    }
+
+    public static User create(
+            String name,
+            String email,
+            String passwordHash,
+            List<CharacterAssignment> characters,
+            LocalTime playTimeStart,
+            LocalTime playTimeEnd,
+            String message) {
+
+        if (characters == null || characters.isEmpty() || characters.size() > 4) {
+            throw new IllegalArgumentException("characters must contain between 1 and 4 elements.");
+        }
+
+        User user = new User();
+        user.name = name;
+        user.email = email;
+        user.passwordHash = passwordHash;
+        user.playTimeStart = playTimeStart;
+        user.playTimeEnd = playTimeEnd;
+        user.message = message;
+
+        CharacterAssignment assignment1 = characters.get(0);
+        user.character1 = assignment1.character();
+        user.rank1 = assignment1.rank();
+        user.mr1 = assignment1.mr();
+
+        if (characters.size() >= 2) {
+            CharacterAssignment assignment2 = characters.get(1);
+            user.character2 = assignment2.character();
+            user.rank2 = assignment2.rank();
+            user.mr2 = assignment2.mr();
+        }
+
+        if (characters.size() >= 3) {
+            CharacterAssignment assignment3 = characters.get(2);
+            user.character3 = assignment3.character();
+            user.rank3 = assignment3.rank();
+            user.mr3 = assignment3.mr();
+        }
+
+        if (characters.size() >= 4) {
+            CharacterAssignment assignment4 = characters.get(3);
+            user.character4 = assignment4.character();
+            user.rank4 = assignment4.rank();
+            user.mr4 = assignment4.mr();
+        }
+
+        return user;
     }
 
     public Long getId() {

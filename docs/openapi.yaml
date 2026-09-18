@@ -194,7 +194,7 @@ paths:
                   play_time_end:
                     type: string
                     description: プレイ終了時間
-                    example: "24:00"
+                    example: "23:30"
                   message:
                     type: string
                     description: ユーザーのメッセージ
@@ -315,7 +315,7 @@ paths:
                   play_time_end:
                     type: string
                     description: プレイ終了時間
-                    example: "24:00"
+                    example: "23:30"
                   message:
                     type: string
                     description: ユーザーのメッセージ
@@ -429,7 +429,7 @@ paths:
                 play_time_end:
                   type: string
                   description: プレイ終了時間
-                  example: "24:00"
+                  example: "23:30"
                 message:
                   type: string
                   description: ユーザーのメッセージ
@@ -517,9 +517,6 @@ paths:
                 - password
                 - name
                 - characters
-                - play_time_start
-                - play_time_end
-                - message
               properties:
                 email:
                   type: string
@@ -541,6 +538,8 @@ paths:
                 characters:
                   type: array
                   description: 使用キャラクター情報
+                  minItems: 1
+                  maxItems: 4
                   items:
                     type: object
                     required:
@@ -561,12 +560,14 @@ paths:
                         example: 1800
                 play_time_start:
                   type: string
+                  format: time
                   description: プレイ開始時間
                   example: "18:00"
                 play_time_end:
                   type: string
+                  format: time
                   description: プレイ終了時間
-                  example: "24:00"
+                  example: "23:30"
                 message:
                   type: string
                   description: ユーザーのメッセージ
@@ -583,6 +584,7 @@ paths:
                 properties:
                   id:
                     type: integer
+                    format: int64
                     description: 登録されたユーザーのID
                     example: 123
 
@@ -591,42 +593,39 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-18T12:00:00"
+                status: 400
+                error: Bad Request
+                message: "email: must be a well-formed email address"
+                path: /api/users
 
         '409':
           description: データが競合
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Email already exists
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-18T12:00:00"
+                status: 409
+                error: Conflict
+                message: "Email already exists. email=user@example.com"
+                path: /api/users
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-18T12:00:00"
+                status: 500
+                error: Internal Server Error
+                message: "An unexpected error occurred."
+                path: /api/users
 
   /teams:
     get:
@@ -2726,6 +2725,37 @@ paths:
                     example: Internal server error
 
 components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - timestamp
+        - status
+        - error
+        - message
+        - path
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: エラー発生日時
+          example: "2026-09-18T12:00:00"
+        status:
+          type: integer
+          description: HTTPステータスコード
+          example: 400
+        error:
+          type: string
+          description: HTTPステータスの理由句
+          example: Bad Request
+        message:
+          type: string
+          description: エラーメッセージ
+          example: Invalid request
+        path:
+          type: string
+          description: リクエストパス
+          example: /api/users
   securitySchemes:
     BearerAuth:
       type: http
