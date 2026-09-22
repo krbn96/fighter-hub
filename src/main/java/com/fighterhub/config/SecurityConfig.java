@@ -32,6 +32,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
                 // 数値IDのみに一致させ、/api/users/me等の文字列パスは対象外とする
                 .requestMatchers(HttpMethod.GET, "/api/users/{id:[0-9]+}").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form.permitAll());
