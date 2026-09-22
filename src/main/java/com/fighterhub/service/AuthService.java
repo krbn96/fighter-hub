@@ -5,30 +5,35 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.fighterhub.dto.AuthLoginRequest;
+import com.fighterhub.dto.AuthLoginResponse;
 import com.fighterhub.entity.User;
 import com.fighterhub.exception.AuthenticationFailedException;
 import com.fighterhub.repository.UserRepository;
+import com.fighterhub.security.JwtProvider;
 
 @Service
 public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtProvider jwtProvider;
 
     public AuthService(
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            JwtProvider jwtProvider) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtProvider = jwtProvider;
     }
 
-    // JWT生成(Day 5)に必要な最小限の情報のみを持つ、Controller層には公開しない内部専用の認証結果。
-    // User EntityをそのままServiceの外へ返さないため、passwordHash等を含む全フィールドを露出させない。
-    public record AuthenticatedUser(Long userId, String email) {
+    // JWT生成に必要な最小限の情報のみを持つ、Controller層には公開しない内部専用の認証結果。
+    // JWTにemailを含めない設計のため、userIdのみを保持する。
+    public record AuthenticatedUser(Long userId) {
     }
 
     @Transactional(readOnly = true)
-    public AuthenticatedUser authenticate(AuthLoginRequest request) {
+    public AuthLoginResponse login(AuthLoginRequest request) {
         User user = userRepository.findByEmailAndDeleteFlagFalse(request.email())
                 .orElseThrow(AuthenticationFailedException::new);
 
@@ -40,6 +45,9 @@ public class AuthService {
             throw new AuthenticationFailedException();
         }
 
-        return new AuthenticatedUser(user.getId(), user.getEmail());
+        AuthenticatedUser authenticatedUser = new AuthenticatedUser(user.getId());
+        String accessToken = jwtProvider.generateToken(authenticatedUser.userId());
+
+        return new AuthLoginResponse(accessToken);
     }
 }

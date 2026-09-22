@@ -18,9 +18,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.fighterhub.dto.AuthLoginRequest;
+import com.fighterhub.dto.AuthLoginResponse;
 import com.fighterhub.entity.User;
 import com.fighterhub.exception.AuthenticationFailedException;
 import com.fighterhub.repository.UserRepository;
+import com.fighterhub.security.JwtProvider;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
@@ -31,34 +33,37 @@ class AuthServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private JwtProvider jwtProvider;
+
     @InjectMocks
     private AuthService authService;
 
     @Test
-    void authenticate_正しいemailとpasswordの場合_認証に成功する() {
+    void login_正しいemailとpasswordの場合_AccessTokenを含むレスポンスを返す() {
 
         AuthLoginRequest request = new AuthLoginRequest("user@example.com", "password123");
 
         User user = mock(User.class);
         when(user.getId()).thenReturn(1L);
-        when(user.getEmail()).thenReturn("user@example.com");
         when(user.getPasswordHash()).thenReturn("hashed-password");
 
         when(userRepository.findByEmailAndDeleteFlagFalse("user@example.com"))
                 .thenReturn(Optional.of(user));
         when(passwordEncoder.matches("password123", "hashed-password")).thenReturn(true);
+        when(jwtProvider.generateToken(1L)).thenReturn("generated-token");
 
-        AuthService.AuthenticatedUser result = authService.authenticate(request);
+        AuthLoginResponse result = authService.login(request);
 
-        assertEquals(1L, result.userId());
-        assertEquals("user@example.com", result.email());
+        assertEquals("generated-token", result.accessToken());
 
         verify(userRepository).findByEmailAndDeleteFlagFalse("user@example.com");
         verify(passwordEncoder).matches("password123", "hashed-password");
+        verify(jwtProvider).generateToken(1L);
     }
 
     @Test
-    void authenticate_emailが存在しない場合_AuthenticationFailedExceptionを投げる() {
+    void login_emailが存在しない場合_AuthenticationFailedExceptionを投げJwtProviderは呼ばれない() {
 
         AuthLoginRequest request = new AuthLoginRequest("nouser@example.com", "password123");
 
@@ -67,14 +72,15 @@ class AuthServiceTest {
 
         AuthenticationFailedException exception = assertThrows(
                 AuthenticationFailedException.class,
-                () -> authService.authenticate(request));
+                () -> authService.login(request));
 
         assertEquals("Invalid email or password.", exception.getMessage());
         verify(passwordEncoder, never()).matches(any(), any());
+        verify(jwtProvider, never()).generateToken(any());
     }
 
     @Test
-    void authenticate_passwordが一致しない場合_AuthenticationFailedExceptionを投げる() {
+    void login_passwordが一致しない場合_AuthenticationFailedExceptionを投げJwtProviderは呼ばれない() {
 
         AuthLoginRequest request = new AuthLoginRequest("user@example.com", "wrong-password");
 
@@ -87,14 +93,15 @@ class AuthServiceTest {
 
         AuthenticationFailedException exception = assertThrows(
                 AuthenticationFailedException.class,
-                () -> authService.authenticate(request));
+                () -> authService.login(request));
 
         assertEquals("Invalid email or password.", exception.getMessage());
         verify(passwordEncoder).matches("wrong-password", "hashed-password");
+        verify(jwtProvider, never()).generateToken(any());
     }
 
     @Test
-    void authenticate_passwordHashがnullの場合_matchesを呼ばずAuthenticationFailedExceptionを投げる() {
+    void login_passwordHashがnullの場合_matchesもJwtProviderも呼ばずAuthenticationFailedExceptionを投げる() {
 
         AuthLoginRequest request = new AuthLoginRequest("user@example.com", "password123");
 
@@ -106,9 +113,10 @@ class AuthServiceTest {
 
         AuthenticationFailedException exception = assertThrows(
                 AuthenticationFailedException.class,
-                () -> authService.authenticate(request));
+                () -> authService.login(request));
 
         assertEquals("Invalid email or password.", exception.getMessage());
         verify(passwordEncoder, never()).matches(any(), any());
+        verify(jwtProvider, never()).generateToken(any());
     }
 }

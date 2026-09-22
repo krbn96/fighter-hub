@@ -10,3 +10,7 @@ spring:
       ddl-auto: update
     show-sql: true
     open-in-view: false
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 24h

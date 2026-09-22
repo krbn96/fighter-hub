@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.fighterhub.config.SecurityConfig;
 import com.fighterhub.dto.AuthLoginRequest;
+import com.fighterhub.dto.AuthLoginResponse;
 import com.fighterhub.exception.AuthenticationFailedException;
 import com.fighterhub.service.AuthService;
 
@@ -34,7 +35,7 @@ class AuthControllerTest {
     private AuthService authService;
 
     @Test
-    void login_未認証で正しいemailとpasswordを送信した場合_204を返す() throws Exception {
+    void login_未認証で正しいemailとpasswordを送信した場合_200とaccessTokenを返す() throws Exception {
 
         String requestBody = """
                 {
@@ -43,16 +44,17 @@ class AuthControllerTest {
                 }
                 """;
 
-        when(authService.authenticate(any(AuthLoginRequest.class)))
-                .thenReturn(new AuthService.AuthenticatedUser(1L, "test@example.com"));
+        when(authService.login(any(AuthLoginRequest.class)))
+                .thenReturn(new AuthLoginResponse("generated-token"));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
-                .andExpect(status().isNoContent())
-                .andExpect(content().string(""));
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.accessToken").value("generated-token"));
 
-        verify(authService, times(1)).authenticate(any(AuthLoginRequest.class));
+        verify(authService, times(1)).login(any(AuthLoginRequest.class));
     }
 
     @Test
@@ -65,7 +67,7 @@ class AuthControllerTest {
                 }
                 """;
 
-        when(authService.authenticate(any(AuthLoginRequest.class)))
+        when(authService.login(any(AuthLoginRequest.class)))
                 .thenThrow(new AuthenticationFailedException());
 
         mockMvc.perform(post("/api/auth/login")
@@ -79,7 +81,7 @@ class AuthControllerTest {
     }
 
     @Test
-    void login_email形式が不正な場合_400を返しauthenticateは呼ばれない() throws Exception {
+    void login_email形式が不正な場合_400を返しloginは呼ばれない() throws Exception {
 
         String requestBody = """
                 {
@@ -93,11 +95,11 @@ class AuthControllerTest {
                         .content(requestBody))
                 .andExpect(status().isBadRequest());
 
-        verify(authService, never()).authenticate(any());
+        verify(authService, never()).login(any());
     }
 
     @Test
-    void login_emailがblankの場合_400を返しauthenticateは呼ばれない() throws Exception {
+    void login_emailがblankの場合_400を返しloginは呼ばれない() throws Exception {
 
         String requestBody = """
                 {
@@ -111,11 +113,11 @@ class AuthControllerTest {
                         .content(requestBody))
                 .andExpect(status().isBadRequest());
 
-        verify(authService, never()).authenticate(any());
+        verify(authService, never()).login(any());
     }
 
     @Test
-    void login_passwordがblankの場合_400を返しauthenticateは呼ばれない() throws Exception {
+    void login_passwordがblankの場合_400を返しloginは呼ばれない() throws Exception {
 
         String requestBody = """
                 {
@@ -129,6 +131,6 @@ class AuthControllerTest {
                         .content(requestBody))
                 .andExpect(status().isBadRequest());
 
-        verify(authService, never()).authenticate(any());
+        verify(authService, never()).login(any());
     }
 }

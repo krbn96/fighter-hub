@@ -2,14 +2,13 @@ package com.fighterhub.controller;
 
 import jakarta.validation.Valid;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fighterhub.dto.AuthLoginRequest;
+import com.fighterhub.dto.AuthLoginResponse;
 import com.fighterhub.dto.ErrorResponse;
 import com.fighterhub.service.AuthService;
 
@@ -31,12 +30,15 @@ public class AuthController {
 
     @Operation(
         summary = "ログイン",
-        description = "メールアドレスとパスワードで認証します。"
+        description = "メールアドレスとパスワードで認証し、JWT Access Tokenを発行します。"
     )
     @ApiResponses({
         @ApiResponse(
-            responseCode = "204",
-            description = "認証成功"
+            responseCode = "200",
+            description = "認証成功",
+            content = @Content(
+                schema = @Schema(implementation = AuthLoginResponse.class)
+            )
         ),
         @ApiResponse(
             responseCode = "400",
@@ -53,9 +55,8 @@ public class AuthController {
             )
         )
     })
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     @PostMapping("/login")
-    public void login(@Valid @RequestBody AuthLoginRequest request) {
-        authService.authenticate(request);
+    public AuthLoginResponse login(@Valid @RequestBody AuthLoginRequest request) {
+        return authService.login(request);
     }
 }
