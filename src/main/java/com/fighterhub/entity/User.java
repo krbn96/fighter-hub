@@ -118,10 +118,6 @@ public class User {
             LocalTime playTimeEnd,
             String message) {
 
-        if (characters == null || characters.isEmpty() || characters.size() > 4) {
-            throw new IllegalArgumentException("characters must contain between 1 and 4 elements.");
-        }
-
         User user = new User();
         user.name = name;
         user.email = email;
@@ -129,34 +125,60 @@ public class User {
         user.playTimeStart = playTimeStart;
         user.playTimeEnd = playTimeEnd;
         user.message = message;
-
-        CharacterAssignment assignment1 = characters.get(0);
-        user.character1 = assignment1.character();
-        user.rank1 = assignment1.rank();
-        user.mr1 = assignment1.mr();
-
-        if (characters.size() >= 2) {
-            CharacterAssignment assignment2 = characters.get(1);
-            user.character2 = assignment2.character();
-            user.rank2 = assignment2.rank();
-            user.mr2 = assignment2.mr();
-        }
-
-        if (characters.size() >= 3) {
-            CharacterAssignment assignment3 = characters.get(2);
-            user.character3 = assignment3.character();
-            user.rank3 = assignment3.rank();
-            user.mr3 = assignment3.mr();
-        }
-
-        if (characters.size() >= 4) {
-            CharacterAssignment assignment4 = characters.get(3);
-            user.character4 = assignment4.character();
-            user.rank4 = assignment4.rank();
-            user.mr4 = assignment4.mr();
-        }
+        user.updateCharacters(characters);
 
         return user;
+    }
+
+    public void updateName(String name) {
+        this.name = name;
+    }
+
+    // charactersを1〜4件で全置換する。使用されない枠はcharacter/rank/mrすべてをnullにする。
+    public void updateCharacters(List<CharacterAssignment> characters) {
+        if (characters == null || characters.isEmpty() || characters.size() > 4) {
+            throw new IllegalArgumentException("characters must contain between 1 and 4 elements.");
+        }
+
+        CharacterAssignment assignment1 = characters.size() >= 1 ? characters.get(0) : null;
+        this.character1 = assignment1 != null ? assignment1.character() : null;
+        this.rank1 = assignment1 != null ? assignment1.rank() : null;
+        this.mr1 = assignment1 != null ? assignment1.mr() : null;
+
+        CharacterAssignment assignment2 = characters.size() >= 2 ? characters.get(1) : null;
+        this.character2 = assignment2 != null ? assignment2.character() : null;
+        this.rank2 = assignment2 != null ? assignment2.rank() : null;
+        this.mr2 = assignment2 != null ? assignment2.mr() : null;
+
+        CharacterAssignment assignment3 = characters.size() >= 3 ? characters.get(2) : null;
+        this.character3 = assignment3 != null ? assignment3.character() : null;
+        this.rank3 = assignment3 != null ? assignment3.rank() : null;
+        this.mr3 = assignment3 != null ? assignment3.mr() : null;
+
+        CharacterAssignment assignment4 = characters.size() >= 4 ? characters.get(3) : null;
+        this.character4 = assignment4 != null ? assignment4.character() : null;
+        this.rank4 = assignment4 != null ? assignment4.rank() : null;
+        this.mr4 = assignment4 != null ? assignment4.mr() : null;
+    }
+
+    public void updatePlayTimeStart(LocalTime playTimeStart) {
+        this.playTimeStart = playTimeStart;
+    }
+
+    public void updatePlayTimeEnd(LocalTime playTimeEnd) {
+        this.playTimeEnd = playTimeEnd;
+    }
+
+    public void updateMessage(String message) {
+        this.message = message;
+    }
+
+    public void updateXId(String xId) {
+        this.xId = xId;
+    }
+
+    public void updateDiscordId(String discordId) {
+        this.discordId = discordId;
     }
 
     public Long getId() {

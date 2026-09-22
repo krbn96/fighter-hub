@@ -23,13 +23,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.openapitools.jackson.nullable.JsonNullable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.fighterhub.dto.UserCharacterRequest;
 import com.fighterhub.dto.UserCharacterResponse;
 import com.fighterhub.dto.UserCreateRequest;
 import com.fighterhub.dto.UserCreateResponse;
+import com.fighterhub.dto.UserMeResponse;
 import com.fighterhub.dto.UserPublicResponse;
+import com.fighterhub.dto.UserUpdateRequest;
 import com.fighterhub.entity.Character;
 import com.fighterhub.entity.User;
 import com.fighterhub.exception.EmailAlreadyExistsException;
@@ -313,5 +316,286 @@ class UserServiceTest {
 
         assertNotNull(response.characters());
         assertTrue(response.characters().isEmpty());
+    }
+
+    // ==== updateUser ====
+
+    private static UserUpdateRequest allUndefined() {
+        return new UserUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined());
+    }
+
+    @Test
+    void updateUser_該当する有効ユーザーが存在しない場合_UserNotFoundExceptionを投げる() {
+
+        when(userRepository.findByIdAndDeleteFlagFalse(999L)).thenReturn(Optional.empty());
+
+        UserNotFoundException exception = assertThrows(
+                UserNotFoundException.class,
+                () -> userService.updateUser(999L, allUndefined()));
+
+        assertEquals("User not found. id=999", exception.getMessage());
+    }
+
+    @Test
+    void updateUser_全項目未指定の場合_Userを変更せずCharacterRepositoryへアクセスしない() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserMeResponse response = userService.updateUser(1L, allUndefined());
+
+        assertNotNull(response);
+
+        verify(user, never()).updateName(any());
+        verify(user, never()).updateCharacters(any());
+        verify(user, never()).updatePlayTimeStart(any());
+        verify(user, never()).updatePlayTimeEnd(any());
+        verify(user, never()).updateMessage(any());
+        verify(user, never()).updateXId(any());
+        verify(user, never()).updateDiscordId(any());
+        verify(characterRepository, never()).findById(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void updateUser_nameだけ指定された場合_nameだけ更新する() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.of("New Name"), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined());
+
+        UserMeResponse response = userService.updateUser(1L, request);
+
+        assertNotNull(response);
+        verify(user).updateName("New Name");
+        verify(user, never()).updateCharacters(any());
+        verify(user, never()).updatePlayTimeStart(any());
+        verify(user, never()).updatePlayTimeEnd(any());
+        verify(user, never()).updateMessage(any());
+        verify(user, never()).updateXId(any());
+        verify(user, never()).updateDiscordId(any());
+        verify(characterRepository, never()).findById(any());
+    }
+
+    @Test
+    void updateUser_messageが明示的nullの場合_messageをnullで更新する() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.of(null), JsonNullable.undefined(),
+                JsonNullable.undefined());
+
+        userService.updateUser(1L, request);
+
+        verify(user).updateMessage(null);
+    }
+
+    @Test
+    void updateUser_playTimeStartが明示的nullの場合_nullで更新する() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.of(null),
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined());
+
+        userService.updateUser(1L, request);
+
+        verify(user).updatePlayTimeStart(null);
+        verify(user, never()).updatePlayTimeEnd(any());
+    }
+
+    @Test
+    void updateUser_xIdが明示的nullかつdiscordIdが値ありの場合_それぞれ正しく更新する() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.of(null),
+                JsonNullable.of("new#1234"));
+
+        userService.updateUser(1L, request);
+
+        verify(user).updateXId(null);
+        verify(user).updateDiscordId("new#1234");
+    }
+
+    @Test
+    void updateUser_charactersが1件指定された場合_CharacterAssignmentへ変換して全置換を委譲する() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        Character character = new Character(1L, "Ryu");
+        when(characterRepository.findById(1L)).thenReturn(Optional.of(character));
+
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "MASTER", 1600);
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.of(List.of(characterRequest)),
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined());
+
+        UserMeResponse response = userService.updateUser(1L, request);
+
+        assertNotNull(response);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<User.CharacterAssignment>> captor = ArgumentCaptor.forClass(List.class);
+        verify(user).updateCharacters(captor.capture());
+
+        List<User.CharacterAssignment> assignments = captor.getValue();
+        assertEquals(1, assignments.size());
+        assertEquals(character, assignments.get(0).character());
+        assertEquals("MASTER", assignments.get(0).rank());
+        assertEquals(1600, assignments.get(0).mr());
+    }
+
+    @Test
+    void updateUser_charactersに同じcharacterIdが複数指定された場合_InvalidRequestExceptionを投げる() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserCharacterRequest characterRequest1 = new UserCharacterRequest(1L, "MASTER", 1600);
+        UserCharacterRequest characterRequest2 = new UserCharacterRequest(1L, "DIAMOND", null);
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.of(List.of(characterRequest1, characterRequest2)),
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined());
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> userService.updateUser(1L, request));
+
+        assertEquals("Duplicate character_id specified: 1", exception.getMessage());
+        verify(characterRepository, never()).findById(any());
+        verify(user, never()).updateCharacters(any());
+    }
+
+    @Test
+    void updateUser_指定したcharacterIdが存在しない場合_InvalidRequestExceptionを投げる() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+        when(characterRepository.findById(999L)).thenReturn(Optional.empty());
+
+        UserCharacterRequest characterRequest = new UserCharacterRequest(999L, "MASTER", 1600);
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.of(List.of(characterRequest)),
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined());
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> userService.updateUser(1L, request));
+
+        assertEquals("Character not found. character_id=999", exception.getMessage());
+        verify(user, never()).updateCharacters(any());
+    }
+
+    // ==== findMe ====
+
+    @Test
+    void findMe_有効なuserIdの場合_emailを含むUserMeResponseを返す() {
+
+        Character character1 = new Character(1L, "Ryu");
+        Character character3 = new Character(3L, "Chun-Li");
+
+        LocalTime playTimeStart = LocalTime.of(20, 0);
+        LocalDateTime createdAt = LocalDateTime.of(2026, 1, 1, 0, 0);
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 1, 2, 0, 0);
+
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
+        when(user.getName()).thenReturn("Test User");
+        when(user.getCharacter1()).thenReturn(character1);
+        when(user.getRank1()).thenReturn("MASTER");
+        when(user.getMr1()).thenReturn(1600);
+        when(user.getCharacter2()).thenReturn(null);
+        when(user.getCharacter3()).thenReturn(character3);
+        when(user.getRank3()).thenReturn("PLATINUM");
+        when(user.getMr3()).thenReturn(1200);
+        when(user.getCharacter4()).thenReturn(null);
+        when(user.getPlayTimeStart()).thenReturn(playTimeStart);
+        when(user.getPlayTimeEnd()).thenReturn(null);
+        when(user.getMessage()).thenReturn(null);
+        when(user.getEmail()).thenReturn("user@example.com");
+        when(user.getXId()).thenReturn(null);
+        when(user.getDiscordId()).thenReturn(null);
+        when(user.getCreatedAt()).thenReturn(createdAt);
+        when(user.getUpdatedAt()).thenReturn(updatedAt);
+
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserMeResponse response = userService.findMe(1L);
+
+        // emailが含まれること
+        assertEquals("user@example.com", response.email());
+
+        // slot順でUserCharacterResponseへ変換され、character2/4(null)はスキップされること
+        assertEquals(2, response.characters().size());
+        assertEquals(1L, response.characters().get(0).characterId());
+        assertEquals("MASTER", response.characters().get(0).rank());
+        assertEquals(1600, response.characters().get(0).mr());
+        assertEquals(3L, response.characters().get(1).characterId());
+        assertEquals("PLATINUM", response.characters().get(1).rank());
+        assertEquals(1200, response.characters().get(1).mr());
+
+        // nullableなプロフィール項目がnullでも正しく返せること
+        assertEquals(playTimeStart, response.playTimeStart());
+        assertEquals(null, response.playTimeEnd());
+        assertEquals(null, response.message());
+        assertEquals(null, response.xId());
+        assertEquals(null, response.discordId());
+
+        assertEquals(1L, response.id());
+        assertEquals("Test User", response.name());
+        assertEquals(createdAt, response.createdAt());
+        assertEquals(updatedAt, response.updatedAt());
+    }
+
+    @Test
+    void findMe_存在しないuserIdの場合_UserNotFoundExceptionを投げる() {
+
+        when(userRepository.findByIdAndDeleteFlagFalse(999L)).thenReturn(Optional.empty());
+
+        UserNotFoundException exception = assertThrows(
+                UserNotFoundException.class,
+                () -> userService.findMe(999L));
+
+        assertEquals("User not found. id=999", exception.getMessage());
+    }
+
+    @Test
+    void findMe_UserMeResponseにpasswordHashとdeleteFlagが含まれない設計であること() {
+        // UserMeResponseレコード自体がpasswordHash/deleteFlagフィールドを持たないため、
+        // toUserMeResponse()経由でこれらがレスポンスへ露出することは構造上あり得ない。
+        // ここではrecordの構成要素を確認することでその設計を担保する。
+
+        List<String> componentNames = java.util.Arrays.stream(UserMeResponse.class.getRecordComponents())
+                .map(java.lang.reflect.RecordComponent::getName)
+                .toList();
+
+        assertTrue(componentNames.contains("email"));
+        assertTrue(!componentNames.contains("passwordHash"));
+        assertTrue(!componentNames.contains("deleteFlag"));
     }
 }

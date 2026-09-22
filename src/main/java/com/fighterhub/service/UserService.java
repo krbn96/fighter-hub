@@ -13,7 +13,9 @@ import com.fighterhub.dto.UserCharacterRequest;
 import com.fighterhub.dto.UserCharacterResponse;
 import com.fighterhub.dto.UserCreateRequest;
 import com.fighterhub.dto.UserCreateResponse;
+import com.fighterhub.dto.UserMeResponse;
 import com.fighterhub.dto.UserPublicResponse;
+import com.fighterhub.dto.UserUpdateRequest;
 import com.fighterhub.entity.Character;
 import com.fighterhub.entity.User;
 import com.fighterhub.exception.EmailAlreadyExistsException;
@@ -44,7 +46,82 @@ public class UserService {
             throw new EmailAlreadyExistsException(request.email());
         }
 
-        List<UserCharacterRequest> characterRequests = request.characters();
+        List<User.CharacterAssignment> characterAssignments = resolveCharacterAssignments(request.characters());
+
+        String passwordHash = passwordEncoder.encode(request.password());
+
+        User user = User.create(
+                request.name(),
+                request.email(),
+                passwordHash,
+                characterAssignments,
+                request.playTimeStart(),
+                request.playTimeEnd(),
+                request.message()
+        );
+
+        User savedUser = userRepository.save(user);
+
+        return new UserCreateResponse(savedUser.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public UserPublicResponse findById(Long id) {
+        User user = userRepository.findByIdAndDeleteFlagFalse(id)
+                .orElseThrow(() -> new UserNotFoundException(id));
+
+        return toUserPublicResponse(user);
+    }
+
+    @Transactional(readOnly = true)
+    public UserMeResponse findMe(Long userId) {
+        User user = userRepository.findByIdAndDeleteFlagFalse(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        return toUserMeResponse(user);
+    }
+
+    @Transactional
+    public UserMeResponse updateUser(Long userId, UserUpdateRequest request) {
+        User user = userRepository.findByIdAndDeleteFlagFalse(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        if (!request.name().isUndefined()) {
+            user.updateName(request.name().get());
+        }
+
+        if (!request.characters().isUndefined()) {
+            List<User.CharacterAssignment> characterAssignments =
+                    resolveCharacterAssignments(request.characters().get());
+            user.updateCharacters(characterAssignments);
+        }
+
+        if (!request.playTimeStart().isUndefined()) {
+            user.updatePlayTimeStart(request.playTimeStart().get());
+        }
+
+        if (!request.playTimeEnd().isUndefined()) {
+            user.updatePlayTimeEnd(request.playTimeEnd().get());
+        }
+
+        if (!request.message().isUndefined()) {
+            user.updateMessage(request.message().get());
+        }
+
+        if (!request.xId().isUndefined()) {
+            user.updateXId(request.xId().get());
+        }
+
+        if (!request.discordId().isUndefined()) {
+            user.updateDiscordId(request.discordId().get());
+        }
+
+        return toUserMeResponse(user);
+    }
+
+    // characterId重複チェック・Character解決・CharacterAssignment変換をcreateUser/updateUserで共通化する。
+    private List<User.CharacterAssignment> resolveCharacterAssignments(
+            List<UserCharacterRequest> characterRequests) {
 
         Set<Long> characterIds = new HashSet<>();
         for (UserCharacterRequest characterRequest : characterRequests) {
@@ -70,29 +147,7 @@ public class UserService {
             ));
         }
 
-        String passwordHash = passwordEncoder.encode(request.password());
-
-        User user = User.create(
-                request.name(),
-                request.email(),
-                passwordHash,
-                characterAssignments,
-                request.playTimeStart(),
-                request.playTimeEnd(),
-                request.message()
-        );
-
-        User savedUser = userRepository.save(user);
-
-        return new UserCreateResponse(savedUser.getId());
-    }
-
-    @Transactional(readOnly = true)
-    public UserPublicResponse findById(Long id) {
-        User user = userRepository.findByIdAndDeleteFlagFalse(id)
-                .orElseThrow(() -> new UserNotFoundException(id));
-
-        return toUserPublicResponse(user);
+        return characterAssignments;
     }
 
     private UserPublicResponse toUserPublicResponse(User user) {
@@ -122,6 +177,41 @@ public class UserService {
                 user.getPlayTimeStart(),
                 user.getPlayTimeEnd(),
                 user.getMessage(),
+                user.getXId(),
+                user.getDiscordId(),
+                user.getCreatedAt(),
+                user.getUpdatedAt()
+        );
+    }
+
+    private UserMeResponse toUserMeResponse(User user) {
+        List<UserCharacterResponse> characters = new ArrayList<>();
+
+        if (user.getCharacter1() != null) {
+            characters.add(new UserCharacterResponse(
+                    user.getCharacter1().getId(), user.getRank1(), user.getMr1()));
+        }
+        if (user.getCharacter2() != null) {
+            characters.add(new UserCharacterResponse(
+                    user.getCharacter2().getId(), user.getRank2(), user.getMr2()));
+        }
+        if (user.getCharacter3() != null) {
+            characters.add(new UserCharacterResponse(
+                    user.getCharacter3().getId(), user.getRank3(), user.getMr3()));
+        }
+        if (user.getCharacter4() != null) {
+            characters.add(new UserCharacterResponse(
+                    user.getCharacter4().getId(), user.getRank4(), user.getMr4()));
+        }
+
+        return new UserMeResponse(
+                user.getId(),
+                user.getName(),
+                characters,
+                user.getPlayTimeStart(),
+                user.getPlayTimeEnd(),
+                user.getMessage(),
+                user.getEmail(),
                 user.getXId(),
                 user.getDiscordId(),
                 user.getCreatedAt(),
