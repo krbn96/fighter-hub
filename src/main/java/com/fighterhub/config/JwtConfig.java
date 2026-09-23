@@ -10,10 +10,12 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
-// JWT生成用のBean定義。既存SecurityConfig（SecurityFilterChain/PasswordEncoder）とは
+// JWT生成・検証用のBean定義。既存SecurityConfig（SecurityFilterChain/PasswordEncoder）とは
 // 別クラスとして分離し、SecurityFilterChainの挙動には一切影響しない。
 @EnableConfigurationProperties(JwtProperties.class)
 @Configuration
@@ -27,12 +29,23 @@ public class JwtConfig {
         return Clock.systemUTC();
     }
 
+    // JwtEncoderとJwtDecoderが必ず同じ鍵を使うよう、SecretKeyをBean化して共有する。
     @Bean
-    public JwtEncoder jwtEncoder(JwtProperties jwtProperties) {
-        SecretKey secretKey = resolveSecretKey(jwtProperties.secret());
+    public SecretKey jwtSecretKey(JwtProperties jwtProperties) {
+        return resolveSecretKey(jwtProperties.secret());
+    }
 
-        return NimbusJwtEncoder.withSecretKey(secretKey)
+    @Bean
+    public JwtEncoder jwtEncoder(SecretKey jwtSecretKey) {
+        return NimbusJwtEncoder.withSecretKey(jwtSecretKey)
                 .algorithm(MacAlgorithm.HS256)
+                .build();
+    }
+
+    @Bean
+    public JwtDecoder jwtDecoder(SecretKey jwtSecretKey) {
+        return NimbusJwtDecoder.withSecretKey(jwtSecretKey)
+                .macAlgorithm(MacAlgorithm.HS256)
                 .build();
     }
 

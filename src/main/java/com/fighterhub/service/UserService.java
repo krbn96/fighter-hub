@@ -116,6 +116,11 @@ public class UserService {
             user.updateDiscordId(request.discordId().get());
         }
 
+        // dirty checkingによるUPDATEはtransactionコミット時までflushされないため、
+        // flushしないまま生成すると@UpdateTimestampが未反映のupdatedAtをレスポンスに含めてしまう。
+        // ここで明示的にflushし、DBへの反映後の値をレスポンスへ反映させる。
+        userRepository.flush();
+
         return toUserMeResponse(user);
     }
 

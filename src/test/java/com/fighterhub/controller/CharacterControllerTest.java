@@ -9,6 +9,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.context.annotation.Import;
@@ -27,6 +28,11 @@ class CharacterControllerTest {
 
     @MockitoBean
     private CharacterService characterService;
+
+    // SecurityFilterChainがJwtDecoderを要求するためコンテキスト起動に必要。
+    // permitAllのため、このクラスのテストではdecodeは呼ばれない。
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
 
     @Test
     void findById_存在するIDを指定した場合_200とキャラクターを返す() throws Exception {
