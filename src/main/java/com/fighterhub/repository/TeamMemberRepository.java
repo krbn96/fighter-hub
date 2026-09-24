@@ -1,6 +1,10 @@
 package com.fighterhub.repository;
 
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.fighterhub.entity.TeamMember;
 
@@ -11,4 +15,21 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
 
     // 同一Tournamentで1ユーザー1Teamの所属確認
     boolean existsByUser_IdAndTeam_Tournament_Id(Long userId, Long tournamentId);
+
+    // T_TEAM_MEMBERSを基準に、指定Userが所属している(owner/非ownerを問わない)TeamMemberを取得する。
+    // ownerId基準の検索は行わない。deleteFlag条件がTeam/Tournament/ownerにまたがるため
+    // derived queryでは不自然になり、JPQLを使用する。JOIN FETCHでN+1を避ける。
+    // (HibernateのJOIN FETCH検証上、fetchしたTeamを直接SELECTすることはできないため、
+    //  FROM句のrootであるTeamMemberをSELECTし、呼び出し側でgetTeam()を取り出す)
+    @Query("""
+            SELECT tm FROM TeamMember tm
+            JOIN FETCH tm.team t
+            JOIN FETCH t.tournament tour
+            JOIN FETCH t.owner o
+            WHERE tm.user.id = :userId
+              AND t.deleteFlag = false
+              AND tour.deleteFlag = false
+              AND o.deleteFlag = false
+            """)
+    List<TeamMember> findActiveTeamMembershipsByUserId(@Param("userId") Long userId);
 }

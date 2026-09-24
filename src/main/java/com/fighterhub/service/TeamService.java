@@ -7,12 +7,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fighterhub.dto.TeamCreateRequest;
 import com.fighterhub.dto.TeamCreateResponse;
+import com.fighterhub.dto.TeamResponse;
 import com.fighterhub.entity.Team;
 import com.fighterhub.entity.TeamMember;
 import com.fighterhub.entity.Tournament;
 import com.fighterhub.entity.User;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
 import com.fighterhub.exception.InvalidRequestException;
+import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.exception.TournamentNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
 import com.fighterhub.repository.CharacterRepository;
@@ -72,6 +74,34 @@ public class TeamService {
         return toTeamCreateResponse(savedTeam);
     }
 
+    @Transactional(readOnly = true)
+    public List<TeamResponse> findAllTeams() {
+        return teamRepository.findAllActiveTeams().stream()
+                .map(this::toTeamResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public TeamResponse findTeamById(Long teamId) {
+        Team team = teamRepository.findActiveTeamById(teamId)
+                .orElseThrow(() -> new TeamNotFoundException(teamId));
+
+        return toTeamResponse(team);
+    }
+
+    // 「ownerであるTeam」ではなく、T_TEAM_MEMBERSを基準に所属しているTeamを返す。
+    // ownerも自身のTeamのTeamMemberとして登録されているため、この検索だけでowner分も含まれる。
+    @Transactional(readOnly = true)
+    public List<TeamResponse> findMyTeams(Long userId) {
+        userRepository.findByIdAndDeleteFlagFalse(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        return teamMemberRepository.findActiveTeamMembershipsByUserId(userId).stream()
+                .map(TeamMember::getTeam)
+                .map(this::toTeamResponse)
+                .toList();
+    }
+
     // characterRequirementsはDB上JSONBで保持しFK制約を持たないため、
     // 指定された各Character IDがM_CHARACTERSに実在するかをここで検証する。
     // null/空リストは「キャラクター条件なし」として検証をスキップする。
@@ -92,6 +122,22 @@ public class TeamService {
                 team.getId(),
                 team.getTournament().getId(),
                 team.getOwner().getId(),
+                team.getName(),
+                team.getRankRequirement(),
+                team.getCharacterRequirements(),
+                team.getRecruitmentMessage(),
+                team.getCreatedAt(),
+                team.getUpdatedAt()
+        );
+    }
+
+    private TeamResponse toTeamResponse(Team team) {
+        return new TeamResponse(
+                team.getId(),
+                team.getTournament().getId(),
+                team.getTournament().getName(),
+                team.getOwner().getId(),
+                team.getOwner().getName(),
                 team.getName(),
                 team.getRankRequirement(),
                 team.getCharacterRequirements(),

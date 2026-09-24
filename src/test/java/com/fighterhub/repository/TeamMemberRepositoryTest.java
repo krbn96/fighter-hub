@@ -1,6 +1,7 @@
 package com.fighterhub.repository;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
 import com.fighterhub.dto.UserCharacterRequest;
@@ -60,6 +62,9 @@ class TeamMemberRepositoryTest {
 
     @Autowired
     private CharacterRepository characterRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private final List<Long> createdTeamMemberIds = new ArrayList<>();
     private final List<Long> createdTeamIds = new ArrayList<>();
@@ -117,6 +122,88 @@ class TeamMemberRepositoryTest {
         assertThrows(
                 DataIntegrityViolationException.class,
                 () -> teamMemberRepository.save(duplicate));
+    }
+
+    @Test
+    void findActiveTeamsByMemberUserId_ownerであるTeamを取得できる() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        createTeamMember(team, owner);
+
+        List<Long> foundIds = teamMemberRepository.findActiveTeamMembershipsByUserId(owner.getId())
+                .stream().map(tm -> tm.getTeam().getId()).toList();
+
+        assertTrue(foundIds.contains(team.getId()));
+    }
+
+    @Test
+    void findActiveTeamsByMemberUserId_ownerではないTeamMemberとして所属するTeamも取得できる() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        User nonOwnerMember = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        // ownerだけでなく、owner以外のTeamMemberも登録する。
+        createTeamMember(team, owner);
+        createTeamMember(team, nonOwnerMember);
+
+        List<Long> foundIds = teamMemberRepository.findActiveTeamMembershipsByUserId(nonOwnerMember.getId())
+                .stream().map(tm -> tm.getTeam().getId()).toList();
+
+        // nonOwnerMemberはこのTeamのownerではないが、TeamMemberとして所属しているため
+        // 取得できることを確認する(ownerId基準の検索になっていないことの確認)。
+        assertTrue(foundIds.contains(team.getId()));
+        assertNotEquals(team.getOwner().getId(), nonOwnerMember.getId());
+    }
+
+    @Test
+    void findActiveTeamsByMemberUserId_TeamdeleteFlagtrueの所属Teamは除外する() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        createTeamMember(team, owner);
+
+        jdbcTemplate.update("UPDATE t_teams SET delete_flag = true WHERE id = ?", team.getId());
+
+        List<Long> foundIds = teamMemberRepository.findActiveTeamMembershipsByUserId(owner.getId())
+                .stream().map(tm -> tm.getTeam().getId()).toList();
+
+        assertFalse(foundIds.contains(team.getId()));
+    }
+
+    @Test
+    void findActiveTeamsByMemberUserId_TournamentdeleteFlagtrueの所属Teamは除外する() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        createTeamMember(team, owner);
+
+        jdbcTemplate.update("UPDATE t_tournaments SET delete_flag = true WHERE id = ?", tournament.getId());
+
+        List<Long> foundIds = teamMemberRepository.findActiveTeamMembershipsByUserId(owner.getId())
+                .stream().map(tm -> tm.getTeam().getId()).toList();
+
+        assertFalse(foundIds.contains(team.getId()));
+    }
+
+    @Test
+    void findActiveTeamsByMemberUserId_ownerdeleteFlagtrueの所属Teamは除外する() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        createTeamMember(team, owner);
+
+        jdbcTemplate.update("UPDATE t_users SET delete_flag = true WHERE id = ?", owner.getId());
+
+        List<Long> foundIds = teamMemberRepository.findActiveTeamMembershipsByUserId(owner.getId())
+                .stream().map(tm -> tm.getTeam().getId()).toList();
+
+        assertFalse(foundIds.contains(team.getId()));
     }
 
     private Long anyExistingCharacterId() {
