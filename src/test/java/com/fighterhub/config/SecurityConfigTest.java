@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -35,14 +36,19 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.fighterhub.controller.TeamController;
 import com.fighterhub.controller.UserController;
 import com.fighterhub.dto.UserMeResponse;
+import com.fighterhub.service.TeamService;
 import com.fighterhub.service.UserService;
 
 // SecurityConfigのOAuth2 Resource Server(JWT Bearer)統合を、実際のFilter Chainを通して検証する。
 // GET /api/users/{id:[0-9]+}のみpermitAllのため、GET /api/users/meはanyRequest().authenticated()
 // の対象になる。UserController#findMe(@AuthenticationPrincipal Jwt)へ接続される実在のパスである。
-@WebMvcTest(UserController.class)
+// TeamControllerもスライスに含め、/api/teams系のmatcher確認を実在のハンドラー経由(200)で
+// 行えるようにする(未マッピングパスだとNoHandlerFoundExceptionがGlobalExceptionHandlerの
+// 汎用ハンドラーに捕捉され500になり、permitAllの確認として不適切なため)。
+@WebMvcTest({UserController.class, TeamController.class})
 @Import({SecurityConfig.class, JwtConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=" + SecurityConfigTest.TEST_ONLY_JWT_SECRET,
@@ -66,6 +72,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private UserService userService;
+
+    @MockitoBean
+    private TeamService teamService;
 
     @Test
     void authenticated対象パスへAuthorizationヘッダーなしでアクセスした場合_401を返す() throws Exception {
@@ -171,6 +180,42 @@ class SecurityConfigTest {
                 .andExpect(jsonPath("$.id").value(1));
 
         verify(userService, times(1)).updateUser(eq(1L), any());
+    }
+
+    // ---- /api/teams のSecurityConfig matcher確認 ----
+    // このテストクラスは@WebMvcTest(UserController.class)のためTeamControllerを含まないが、
+    // Spring SecurityのAuthorizationFilterはController到達前に動作するため、
+    // permitAll対象は401にならないこと(404で確認)、authenticated対象は401になることを
+    // Controllerの有無に関係なく検証できる(Day 6 Step 1と同じ手法)。
+
+    @Test
+    void GET_apiTeamsは認証なしでpermitAllとなる() throws Exception {
+        when(teamService.findAllTeams()).thenReturn(java.util.List.of());
+
+        mockMvc.perform(get("/api/teams"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void GET_apiTeams数値idは認証なしでpermitAllとなる() throws Exception {
+        when(teamService.findTeamById(1L)).thenReturn(null);
+
+        mockMvc.perform(get("/api/teams/1"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void GET_apiTeamsMyは認証なしでは401を返しpermitAllにならない() throws Exception {
+        mockMvc.perform(get("/api/teams/my"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void POST_apiTeamsは認証なしでは401を返しpermitAllにならない() throws Exception {
+        mockMvc.perform(post("/api/teams")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
     }
 
     private String generateValidToken() {
