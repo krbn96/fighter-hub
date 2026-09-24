@@ -8,12 +8,14 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fighterhub.dto.TeamCreateRequest;
 import com.fighterhub.dto.TeamCreateResponse;
 import com.fighterhub.dto.TeamResponse;
+import com.fighterhub.dto.TeamUpdateRequest;
 import com.fighterhub.entity.Team;
 import com.fighterhub.entity.TeamMember;
 import com.fighterhub.entity.Tournament;
 import com.fighterhub.entity.User;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
 import com.fighterhub.exception.InvalidRequestException;
+import com.fighterhub.exception.NotTeamOwnerException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.exception.TournamentNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
@@ -100,6 +102,40 @@ public class TeamService {
                 .map(TeamMember::getTeam)
                 .map(this::toTeamResponse)
                 .toList();
+    }
+
+    @Transactional
+    public TeamResponse updateTeam(Long userId, Long teamId, TeamUpdateRequest request) {
+        Team team = teamRepository.findActiveTeamById(teamId)
+                .orElseThrow(() -> new TeamNotFoundException(teamId));
+
+        if (!team.getOwner().getId().equals(userId)) {
+            throw new NotTeamOwnerException(userId, teamId);
+        }
+
+        if (!request.name().isUndefined()) {
+            team.updateName(request.name().get());
+        }
+
+        if (!request.rankRequirement().isUndefined()) {
+            team.updateRankRequirement(request.rankRequirement().get());
+        }
+
+        if (!request.characterRequirements().isUndefined()) {
+            List<Long> characterIds = request.characterRequirements().get();
+            validateCharacterRequirements(characterIds);
+            team.updateCharacterRequirements(characterIds);
+        }
+
+        if (!request.recruitmentMessage().isUndefined()) {
+            team.updateRecruitmentMessage(request.recruitmentMessage().get());
+        }
+
+        // dirty checkingによるUPDATEはtransactionコミット時までflushされないため、
+        // flushしないまま生成すると@UpdateTimestampが未反映のupdatedAtをレスポンスに含めてしまう。
+        teamRepository.flush();
+
+        return toTeamResponse(team);
     }
 
     // characterRequirementsはDB上JSONBで保持しFK制約を持たないため、

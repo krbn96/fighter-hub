@@ -22,16 +22,19 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.openapitools.jackson.nullable.JsonNullable;
 
 import com.fighterhub.dto.TeamCreateRequest;
 import com.fighterhub.dto.TeamCreateResponse;
 import com.fighterhub.dto.TeamResponse;
+import com.fighterhub.dto.TeamUpdateRequest;
 import com.fighterhub.entity.Team;
 import com.fighterhub.entity.TeamMember;
 import com.fighterhub.entity.Tournament;
 import com.fighterhub.entity.User;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
 import com.fighterhub.exception.InvalidRequestException;
+import com.fighterhub.exception.NotTeamOwnerException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.exception.TournamentNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
@@ -342,5 +345,147 @@ class TeamServiceTest {
         assertThrows(UserNotFoundException.class, () -> teamService.findMyTeams(999L));
 
         verify(teamMemberRepository, never()).findActiveTeamMembershipsByUserId(any());
+    }
+
+    private static TeamUpdateRequest allUndefinedTeamUpdateRequest() {
+        return new TeamUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined());
+    }
+
+    @Test
+    void updateTeam_正常系の場合_指定項目がすべて更新されflushしてResponseを返す() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+        when(characterRepository.existsById(1L)).thenReturn(true);
+        when(characterRepository.existsById(2L)).thenReturn(true);
+
+        TeamUpdateRequest request = new TeamUpdateRequest(
+                JsonNullable.of("New Team Name"),
+                JsonNullable.of("DIAMOND"),
+                JsonNullable.of(List.of(1L, 2L)),
+                JsonNullable.of("募集メッセージ更新")
+        );
+
+        TeamResponse response = teamService.updateTeam(1L, 100L, request);
+
+        assertNotNull(response);
+        verify(team).updateName("New Team Name");
+        verify(team).updateRankRequirement("DIAMOND");
+        verify(team).updateCharacterRequirements(List.of(1L, 2L));
+        verify(team).updateRecruitmentMessage("募集メッセージ更新");
+        verify(teamRepository, times(1)).flush();
+    }
+
+    @Test
+    void updateTeam_未指定項目のupdateメソッドは呼ばれずCharacter存在チェックもしない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        TeamUpdateRequest request = new TeamUpdateRequest(
+                JsonNullable.of("New Name Only"),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined()
+        );
+
+        teamService.updateTeam(1L, 100L, request);
+
+        verify(team).updateName("New Name Only");
+        verify(team, never()).updateRankRequirement(any());
+        verify(team, never()).updateCharacterRequirements(any());
+        verify(team, never()).updateRecruitmentMessage(any());
+        verify(characterRepository, never()).existsById(any());
+    }
+
+    @Test
+    void updateTeam_characterRequirementsが明示的nullの場合_nullで更新されCharacter存在チェックはしない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        TeamUpdateRequest request = new TeamUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.of(null), JsonNullable.undefined());
+
+        teamService.updateTeam(1L, 100L, request);
+
+        verify(team).updateCharacterRequirements(null);
+        verify(characterRepository, never()).existsById(any());
+    }
+
+    @Test
+    void updateTeam_characterRequirementsが空リストの場合_空リストで更新されCharacter存在チェックはしない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        TeamUpdateRequest request = new TeamUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.of(List.of()), JsonNullable.undefined());
+
+        teamService.updateTeam(1L, 100L, request);
+
+        verify(team).updateCharacterRequirements(List.of());
+        verify(characterRepository, never()).existsById(any());
+    }
+
+    @Test
+    void updateTeam_存在しないTeamの場合_TeamNotFoundExceptionを投げる() {
+        when(teamRepository.findActiveTeamById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(
+                TeamNotFoundException.class,
+                () -> teamService.updateTeam(1L, 999L, allUndefinedTeamUpdateRequest()));
+
+        verify(teamRepository, never()).flush();
+    }
+
+    @Test
+    void updateTeam_ownerではないUserが更新しようとした場合_NotTeamOwnerExceptionを投げる() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        assertThrows(
+                NotTeamOwnerException.class,
+                () -> teamService.updateTeam(999L, 100L, allUndefinedTeamUpdateRequest()));
+
+        verify(team, never()).updateName(any());
+        verify(teamRepository, never()).flush();
+    }
+
+    @Test
+    void updateTeam_characterRequirementsに存在しないCharacterIdが含まれる場合_InvalidRequestExceptionを投げTeamは更新されない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+        when(characterRepository.existsById(999L)).thenReturn(false);
+
+        TeamUpdateRequest request = new TeamUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.of(List.of(999L)), JsonNullable.undefined());
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> teamService.updateTeam(1L, 100L, request));
+
+        assertEquals("Character not found. character_id=999", exception.getMessage());
+        verify(team, never()).updateCharacterRequirements(any());
+        verify(teamRepository, never()).flush();
     }
 }

@@ -82,6 +82,22 @@ public class Team {
         return team;
     }
 
+    public void updateName(String name) {
+        this.name = name;
+    }
+
+    public void updateRankRequirement(String rankRequirement) {
+        this.rankRequirement = rankRequirement;
+    }
+
+    public void updateCharacterRequirements(List<Long> characterRequirements) {
+        this.characterRequirements = characterRequirements;
+    }
+
+    public void updateRecruitmentMessage(String recruitmentMessage) {
+        this.recruitmentMessage = recruitmentMessage;
+    }
+
     public Long getId() {
         return id;
     }
