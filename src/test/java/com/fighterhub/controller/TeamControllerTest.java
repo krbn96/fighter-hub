@@ -1,6 +1,8 @@
 package com.fighterhub.controller;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -8,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -32,6 +35,7 @@ import com.fighterhub.config.SecurityConfig;
 import com.fighterhub.dto.TeamCreateRequest;
 import com.fighterhub.dto.TeamCreateResponse;
 import com.fighterhub.dto.TeamResponse;
+import com.fighterhub.dto.TeamUpdateRequest;
 import com.fighterhub.service.TeamService;
 
 @WebMvcTest(TeamController.class)
@@ -252,5 +256,92 @@ class TeamControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(teamService, never()).createTeam(any(), any());
+    }
+
+    @Test
+    void updateTeam_JWTありvalidリクエストの場合_200を返しJWTのsubjectのuserIdとPathのidでupdateTeamが呼ばれる() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        when(teamService.updateTeam(eq(1L), eq(100L), any(TeamUpdateRequest.class)))
+                .thenReturn(sampleTeamResponse(100L, 10L, 1L));
+
+        String requestBody = """
+                {
+                  "name": "Team Ryu"
+                }
+                """;
+
+        mockMvc.perform(patch("/api/teams/100")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(100))
+                .andExpect(jsonPath("$.name").value("Team Ryu"));
+
+        verify(teamService, times(1)).updateTeam(eq(1L), eq(100L), any(TeamUpdateRequest.class));
+    }
+
+    @Test
+    void updateTeam_JWTなしの場合_401を返しupdateTeamは呼ばれない() throws Exception {
+        mockMvc.perform(patch("/api/teams/100")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        verify(teamService, never()).updateTeam(any(), any(), any());
+    }
+
+    @Test
+    void updateTeam_nameが空文字の場合_400を返しupdateTeamは呼ばれない() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+
+        String requestBody = """
+                {
+                  "name": ""
+                }
+                """;
+
+        mockMvc.perform(patch("/api/teams/100")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest());
+
+        verify(teamService, never()).updateTeam(any(), any(), any());
+    }
+
+    @Test
+    void updateTeam_明示的nullと項目なしが正しくTeamUpdateRequestへ渡る() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        when(teamService.updateTeam(eq(1L), eq(100L), any(TeamUpdateRequest.class)))
+                .thenReturn(sampleTeamResponse(100L, 10L, 1L));
+
+        // name/rankRequirement/characterRequirementsは項目なし(undefined)、
+        // recruitmentMessageのみ明示的null。
+        String requestBody = """
+                {
+                  "recruitmentMessage": null
+                }
+                """;
+
+        mockMvc.perform(patch("/api/teams/100")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<TeamUpdateRequest> requestCaptor = ArgumentCaptor.forClass(TeamUpdateRequest.class);
+        verify(teamService, times(1)).updateTeam(eq(1L), eq(100L), requestCaptor.capture());
+        TeamUpdateRequest capturedRequest = requestCaptor.getValue();
+
+        assertTrue(capturedRequest.name().isUndefined());
+        assertTrue(capturedRequest.rankRequirement().isUndefined());
+        assertTrue(capturedRequest.characterRequirements().isUndefined());
+        assertFalse(capturedRequest.recruitmentMessage().isUndefined());
+        assertTrue(capturedRequest.recruitmentMessage().isPresent());
+        assertEquals(null, capturedRequest.recruitmentMessage().get());
     }
 }
