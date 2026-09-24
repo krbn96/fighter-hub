@@ -22,7 +22,6 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import tools.jackson.databind.ObjectMapper;
 
 // UserUpdateRequest(PATCH /api/users/me用DTO)のJackson3デシリアライズとJakarta Bean Validationの実挙動を確認する。
-// Service/Entity/Controller側の更新処理はまだ実装していない。
 @ExtendWith(SpringExtension.class)
 @JsonTest
 class UserUpdateRequestTest {

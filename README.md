@@ -18,13 +18,17 @@ FIGHTER HUBでは、大会ごとにチームを作成してメンバーを募集
 
 - キャラクター一覧取得
 - キャラクター詳細取得
-- Swagger UIによるAPI仕様の確認
+- ユーザー登録
+- ログイン（JWT発行）
+- JWT Bearer認証（Spring Security OAuth2 Resource Server, Stateless）
+- 公開ユーザープロフィール取得
+- 自分のプロフィール取得・更新（JWT認証必須）
+- ソフトデリート済みユーザーの認証・取得対象外化
+- Swagger UIによるAPI仕様の確認（Bearer認証対応）
 - 共通エラーハンドリング
 
 ### Planned
 
-- ユーザー登録・ログイン
-- ユーザープロフィール管理
 - 大会情報の閲覧
 - チーム作成・編集
 - 大会ごとのチーム検索
@@ -91,7 +95,19 @@ PostgreSQL
 
 実装済みAPIの仕様は、Springdoc OpenAPIによってControllerやDTOの定義から生成しています。
 
-アプリケーション起動後、以下から確認できます。
+### 実装済みAPI
+
+| Method | Path | 認証 |
+|---|---|---|
+| GET | /api/characters | 不要 |
+| GET | /api/characters/{id} | 不要 |
+| POST | /api/users | 不要 |
+| GET | /api/users/{id} | 不要 |
+| POST | /api/auth/login | 不要 |
+| GET | /api/users/me | JWT必須 |
+| PATCH | /api/users/me | JWT必須 |
+
+詳細な仕様は、アプリケーション起動後に以下から確認できます。
 
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 - OpenAPI JSON: `http://localhost:8080/v3/api-docs`
@@ -198,6 +214,6 @@ Windows:
 
 現在開発中です。
 
-Spring Bootを使用したバックエンドAPIの基盤を構築し、キャラクター情報取得API、共通エラーハンドリング、APIドキュメント、テスト環境まで実装しています。
+Spring Bootを使用したバックエンドAPIの基盤を構築し、キャラクター情報取得API、ユーザー登録、JWT認証によるログイン、自分のプロフィール取得・更新、共通エラーハンドリング、APIドキュメント、テスト環境まで実装しています。
 
-今後は、認証・ユーザー管理、チーム作成・メンバー募集、参加申請、大会管理などの機能を順次実装する予定です。
+今後は、チーム作成・メンバー募集、参加申請、大会管理などの機能を順次実装する予定です。

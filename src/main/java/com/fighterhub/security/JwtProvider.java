@@ -13,8 +13,8 @@ import org.springframework.stereotype.Component;
 
 import com.fighterhub.config.JwtProperties;
 
-// Day 5ではJWT生成のみを扱う。Day 6でトークン検証・userId取得処理を
-// 同じクラスへ追加できるよう、鍵・時計・有効期限をこのクラスに集約している。
+// JWT生成を担当する。
+// トークン検証はSpring SecurityのJwtDecoder側で行う。
 @Component
 public class JwtProvider {
 

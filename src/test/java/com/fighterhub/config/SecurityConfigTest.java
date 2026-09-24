@@ -18,6 +18,8 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -116,6 +118,29 @@ class SecurityConfigTest {
         verify(userService, never()).findMe(any());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"", "abc", "0", "-1", "99999999999999999999"})
+    void authenticated対象パスへ署名は正しいがsubjectが不正なJWTを送信した場合_401を返す(String invalidSubject) throws Exception {
+        String token = generateTokenWithSubject(invalidSubject);
+
+        mockMvc.perform(get(AUTHENTICATED_PATH)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+
+        verify(userService, never()).findMe(any());
+    }
+
+    @Test
+    void authenticated対象パスへ署名は正しいがsubjectクレームが存在しないJWTを送信した場合_401を返す() throws Exception {
+        String token = generateTokenWithoutSubject();
+
+        mockMvc.perform(get(AUTHENTICATED_PATH)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+
+        verify(userService, never()).findMe(any());
+    }
+
     @Test
     void authenticated対象PATCHパスへAuthorizationヘッダーなしでアクセスした場合_401を返す() throws Exception {
         mockMvc.perform(patch(AUTHENTICATED_PATH)
@@ -175,6 +200,34 @@ class SecurityConfigTest {
         Instant expiresAt = issuedAt.plusSeconds(3600);
 
         return encode(encoderWithDifferentKey, issuedAt, expiresAt);
+    }
+
+    private String generateTokenWithSubject(String subject) {
+        Instant issuedAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant expiresAt = issuedAt.plusSeconds(3600);
+
+        JwsHeader jwsHeader = JwsHeader.with(MacAlgorithm.HS256).build();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .subject(subject)
+                .issuedAt(issuedAt)
+                .expiresAt(expiresAt)
+                .build();
+
+        return jwtEncoder.encode(JwtEncoderParameters.from(jwsHeader, claims)).getTokenValue();
+    }
+
+    private String generateTokenWithoutSubject() {
+        Instant issuedAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant expiresAt = issuedAt.plusSeconds(3600);
+
+        JwsHeader jwsHeader = JwsHeader.with(MacAlgorithm.HS256).build();
+        // .subject(...)を呼ばないことで、sub claim自体が存在しないJWTを生成する。
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuedAt(issuedAt)
+                .expiresAt(expiresAt)
+                .build();
+
+        return jwtEncoder.encode(JwtEncoderParameters.from(jwsHeader, claims)).getTokenValue();
     }
 
     private static String encode(JwtEncoder encoder, Instant issuedAt, Instant expiresAt) {

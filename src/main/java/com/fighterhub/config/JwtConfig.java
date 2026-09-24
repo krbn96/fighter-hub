@@ -9,11 +9,16 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+
+import com.fighterhub.security.JwtSubjectValidator;
 
 // JWT生成・検証用のBean定義。既存SecurityConfig（SecurityFilterChain/PasswordEncoder）とは
 // 別クラスとして分離し、SecurityFilterChainの挙動には一切影響しない。
@@ -44,9 +49,17 @@ public class JwtConfig {
 
     @Bean
     public JwtDecoder jwtDecoder(SecretKey jwtSecretKey) {
-        return NimbusJwtDecoder.withSecretKey(jwtSecretKey)
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(jwtSecretKey)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
+
+        // 既定のtimestamp検証(exp等)に加えて、subがFIGHTER HUBの前提(正のLong値)を
+        // 満たすことをvalidatorとして合成する。署名検証・exp検証は変更しない。
+        OAuth2TokenValidator<Jwt> withSubjectValidation =
+                JwtValidators.createDefaultWithValidators(new JwtSubjectValidator());
+        decoder.setJwtValidator(withSubjectValidation);
+
+        return decoder;
     }
 
     // JWT_SECRETの設定不備を、起動時に分かりやすいメッセージで検出する。
