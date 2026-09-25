@@ -1,0 +1,227 @@
+package com.fighterhub.service;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.fighterhub.dto.RecruitmentApplicationCreateRequest;
+import com.fighterhub.dto.RecruitmentApplicationResponse;
+import com.fighterhub.entity.RecruitmentApplication;
+import com.fighterhub.entity.RecruitmentApplicationStatus;
+import com.fighterhub.entity.Team;
+import com.fighterhub.entity.Tournament;
+import com.fighterhub.entity.User;
+import com.fighterhub.exception.CannotApplyToOwnTeamException;
+import com.fighterhub.exception.DuplicatePendingApplicationException;
+import com.fighterhub.exception.DuplicateTournamentMembershipException;
+import com.fighterhub.exception.TeamNotFoundException;
+import com.fighterhub.repository.RecruitmentApplicationRepository;
+import com.fighterhub.repository.TeamMemberRepository;
+import com.fighterhub.repository.TeamRepository;
+import com.fighterhub.repository.UserRepository;
+
+@ExtendWith(MockitoExtension.class)
+class RecruitmentApplicationServiceTest {
+
+    @Mock
+    private RecruitmentApplicationRepository recruitmentApplicationRepository;
+
+    @Mock
+    private TeamRepository teamRepository;
+
+    @Mock
+    private TeamMemberRepository teamMemberRepository;
+
+    @Mock
+    private UserRepository userRepository;
+
+    @InjectMocks
+    private RecruitmentApplicationService recruitmentApplicationService;
+
+    private User mockOwner() {
+        User owner = mock(User.class);
+        lenient().when(owner.getId()).thenReturn(1L);
+        lenient().when(owner.getName()).thenReturn("Owner User");
+        return owner;
+    }
+
+    private User mockApplicant() {
+        User applicant = mock(User.class);
+        lenient().when(applicant.getId()).thenReturn(2L);
+        lenient().when(applicant.getName()).thenReturn("Applicant User");
+        return applicant;
+    }
+
+    private Tournament mockTournament() {
+        Tournament tournament = mock(Tournament.class);
+        lenient().when(tournament.getId()).thenReturn(10L);
+        return tournament;
+    }
+
+    private Team mockTeam(Tournament tournament, User owner) {
+        Team team = mock(Team.class);
+        lenient().when(team.getId()).thenReturn(100L);
+        lenient().when(team.getTournament()).thenReturn(tournament);
+        lenient().when(team.getOwner()).thenReturn(owner);
+        return team;
+    }
+
+    private RecruitmentApplication mockSavedApplication(
+            Team team, User applicant, String message, LocalDateTime now) {
+        RecruitmentApplication application = mock(RecruitmentApplication.class);
+        lenient().when(application.getId()).thenReturn(500L);
+        lenient().when(application.getTeam()).thenReturn(team);
+        lenient().when(application.getUser()).thenReturn(applicant);
+        lenient().when(application.getMessage()).thenReturn(message);
+        lenient().when(application.getStatus()).thenReturn(RecruitmentApplicationStatus.PENDING);
+        lenient().when(application.getCreatedAt()).thenReturn(now);
+        lenient().when(application.getUpdatedAt()).thenReturn(now);
+        return application;
+    }
+
+    @Test
+    void createApplication_有効なTeamへ申請できPENDINGで保存されResponseを返す() {
+        User owner = mockOwner();
+        User applicant = mockApplicant();
+        Tournament tournament = mockTournament();
+        Team team = mockTeam(tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
+        when(recruitmentApplicationRepository.existsByTeam_IdAndUser_IdAndStatus(
+                100L, 2L, RecruitmentApplicationStatus.PENDING)).thenReturn(false);
+        when(userRepository.findByIdAndDeleteFlagFalse(2L)).thenReturn(Optional.of(applicant));
+
+        LocalDateTime now = LocalDateTime.of(2026, 1, 1, 0, 0);
+        RecruitmentApplication savedApplication = mockSavedApplication(team, applicant, "よろしくお願いします", now);
+        when(recruitmentApplicationRepository.save(any(RecruitmentApplication.class))).thenReturn(savedApplication);
+
+        RecruitmentApplicationCreateRequest request = new RecruitmentApplicationCreateRequest("よろしくお願いします");
+        RecruitmentApplicationResponse response = recruitmentApplicationService.createApplication(2L, 100L, request);
+
+        assertEquals(500L, response.id());
+        assertEquals(100L, response.teamId());
+        assertEquals(2L, response.userId());
+        assertEquals("Applicant User", response.userName());
+        assertEquals("よろしくお願いします", response.message());
+        assertEquals(RecruitmentApplicationStatus.PENDING, response.status());
+        assertEquals(now, response.createdAt());
+        assertEquals(now, response.updatedAt());
+
+        ArgumentCaptor<RecruitmentApplication> applicationCaptor =
+                ArgumentCaptor.forClass(RecruitmentApplication.class);
+        verify(recruitmentApplicationRepository, times(1)).save(applicationCaptor.capture());
+        assertEquals(RecruitmentApplicationStatus.PENDING, applicationCaptor.getValue().getStatus());
+        assertEquals(team, applicationCaptor.getValue().getTeam());
+        assertEquals(applicant, applicationCaptor.getValue().getUser());
+    }
+
+    @Test
+    void createApplication_messageがnullでも申請できる() {
+        User owner = mockOwner();
+        User applicant = mockApplicant();
+        Tournament tournament = mockTournament();
+        Team team = mockTeam(tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
+        when(recruitmentApplicationRepository.existsByTeam_IdAndUser_IdAndStatus(
+                100L, 2L, RecruitmentApplicationStatus.PENDING)).thenReturn(false);
+        when(userRepository.findByIdAndDeleteFlagFalse(2L)).thenReturn(Optional.of(applicant));
+
+        LocalDateTime now = LocalDateTime.of(2026, 1, 1, 0, 0);
+        RecruitmentApplication savedApplication = mockSavedApplication(team, applicant, null, now);
+        when(recruitmentApplicationRepository.save(any(RecruitmentApplication.class))).thenReturn(savedApplication);
+
+        RecruitmentApplicationResponse response =
+                recruitmentApplicationService.createApplication(2L, 100L, new RecruitmentApplicationCreateRequest(null));
+
+        assertNull(response.message());
+    }
+
+    @Test
+    void createApplication_Teamが存在しない場合_TeamNotFoundExceptionを投げ後続処理は呼ばれない() {
+        when(teamRepository.findActiveTeamById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(
+                TeamNotFoundException.class,
+                () -> recruitmentApplicationService.createApplication(2L, 999L, new RecruitmentApplicationCreateRequest(null)));
+
+        verify(teamMemberRepository, never()).existsByUser_IdAndTeam_Tournament_Id(any(), any());
+        verify(recruitmentApplicationRepository, never()).existsByTeam_IdAndUser_IdAndStatus(any(), any(), any());
+        verify(userRepository, never()).findByIdAndDeleteFlagFalse(any());
+        verify(recruitmentApplicationRepository, never()).save(any());
+    }
+
+    @Test
+    void createApplication_自分がownerのTeamへ申請しようとした場合_CannotApplyToOwnTeamExceptionを投げ後続処理は呼ばれない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockTeam(tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        assertThrows(
+                CannotApplyToOwnTeamException.class,
+                () -> recruitmentApplicationService.createApplication(1L, 100L, new RecruitmentApplicationCreateRequest(null)));
+
+        verify(teamMemberRepository, never()).existsByUser_IdAndTeam_Tournament_Id(any(), any());
+        verify(recruitmentApplicationRepository, never()).existsByTeam_IdAndUser_IdAndStatus(any(), any(), any());
+        verify(userRepository, never()).findByIdAndDeleteFlagFalse(any());
+        verify(recruitmentApplicationRepository, never()).save(any());
+    }
+
+    @Test
+    void createApplication_同一Tournamentですでにチームに所属している場合_DuplicateTournamentMembershipExceptionを投げ後続処理は呼ばれない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockTeam(tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(true);
+
+        assertThrows(
+                DuplicateTournamentMembershipException.class,
+                () -> recruitmentApplicationService.createApplication(2L, 100L, new RecruitmentApplicationCreateRequest(null)));
+
+        verify(recruitmentApplicationRepository, never()).existsByTeam_IdAndUser_IdAndStatus(any(), any(), any());
+        verify(userRepository, never()).findByIdAndDeleteFlagFalse(any());
+        verify(recruitmentApplicationRepository, never()).save(any());
+    }
+
+    @Test
+    void createApplication_同じTeamへPENDING申請済みの場合_DuplicatePendingApplicationExceptionを投げ後続処理は呼ばれない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockTeam(tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
+        when(recruitmentApplicationRepository.existsByTeam_IdAndUser_IdAndStatus(
+                100L, 2L, RecruitmentApplicationStatus.PENDING)).thenReturn(true);
+
+        assertThrows(
+                DuplicatePendingApplicationException.class,
+                () -> recruitmentApplicationService.createApplication(2L, 100L, new RecruitmentApplicationCreateRequest(null)));
+
+        verify(userRepository, never()).findByIdAndDeleteFlagFalse(any());
+        verify(recruitmentApplicationRepository, never()).save(any());
+    }
+}
