@@ -1,5 +1,6 @@
 package com.fighterhub.repository;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -204,6 +205,80 @@ class TeamMemberRepositoryTest {
                 .stream().map(tm -> tm.getTeam().getId()).toList();
 
         assertFalse(foundIds.contains(team.getId()));
+    }
+
+    @Test
+    void findActiveTeamMembersByTeamId_指定Teamのメンバーを取得できる() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        createTeamMember(team, owner);
+
+        List<Long> userIds = teamMemberRepository.findActiveTeamMembersByTeamId(team.getId())
+                .stream().map(tm -> tm.getUser().getId()).toList();
+
+        assertTrue(userIds.contains(owner.getId()));
+    }
+
+    @Test
+    void findActiveTeamMembersByTeamId_別Teamのメンバーは含まれない() {
+        Long characterId = anyExistingCharacterId();
+        User owner1 = createUser(characterId);
+        User owner2 = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team1 = createTeam(tournament, owner1);
+        Team team2 = createTeam(tournament, owner2);
+        createTeamMember(team1, owner1);
+        createTeamMember(team2, owner2);
+
+        List<Long> userIds = teamMemberRepository.findActiveTeamMembersByTeamId(team1.getId())
+                .stream().map(tm -> tm.getUser().getId()).toList();
+
+        assertTrue(userIds.contains(owner1.getId()));
+        assertFalse(userIds.contains(owner2.getId()));
+    }
+
+    @Test
+    void findActiveTeamMembersByTeamId_deleteFlagtrueのUserは含まれない() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        User otherMember = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        createTeamMember(team, owner);
+        createTeamMember(team, otherMember);
+
+        jdbcTemplate.update("UPDATE t_users SET delete_flag = true WHERE id = ?", otherMember.getId());
+
+        List<Long> userIds = teamMemberRepository.findActiveTeamMembersByTeamId(team.getId())
+                .stream().map(tm -> tm.getUser().getId()).toList();
+
+        assertTrue(userIds.contains(owner.getId()));
+        assertFalse(userIds.contains(otherMember.getId()));
+    }
+
+    @Test
+    void findActiveTeamMembersByTeamId_joinedAt昇順で返る() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        User otherMember = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        createTeamMember(team, owner);
+        createTeamMember(team, otherMember);
+
+        // @CreationTimestampはEntity APIから変更できないため、順序を決定的にするために
+        // JDBCで直接joined_atを設定する(既存のsoft-delete手法と同じ、JDBCによる直接更新)。
+        jdbcTemplate.update("UPDATE t_team_members SET joined_at = ? WHERE team_id = ? AND user_id = ?",
+                LocalDateTime.now().minusHours(2), team.getId(), owner.getId());
+        jdbcTemplate.update("UPDATE t_team_members SET joined_at = ? WHERE team_id = ? AND user_id = ?",
+                LocalDateTime.now().minusHours(1), team.getId(), otherMember.getId());
+
+        List<Long> userIds = teamMemberRepository.findActiveTeamMembersByTeamId(team.getId())
+                .stream().map(tm -> tm.getUser().getId()).toList();
+
+        assertEquals(List.of(owner.getId(), otherMember.getId()), userIds);
     }
 
     private Long anyExistingCharacterId() {

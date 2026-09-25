@@ -26,6 +26,7 @@ import org.openapitools.jackson.nullable.JsonNullable;
 
 import com.fighterhub.dto.TeamCreateRequest;
 import com.fighterhub.dto.TeamCreateResponse;
+import com.fighterhub.dto.TeamMemberResponse;
 import com.fighterhub.dto.TeamResponse;
 import com.fighterhub.dto.TeamUpdateRequest;
 import com.fighterhub.entity.Team;
@@ -487,5 +488,80 @@ class TeamServiceTest {
         assertEquals("Character not found. character_id=999", exception.getMessage());
         verify(team, never()).updateCharacterRequirements(any());
         verify(teamRepository, never()).flush();
+    }
+
+    @Test
+    void findTeamMembers_有効なTeamのメンバー一覧をTeamMemberResponseへ変換して返す() {
+        Team team = mockFullTeam(100L, mockTournament(), mockOwner());
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
+        when(user.getName()).thenReturn("Owner User");
+        LocalDateTime joinedAt = LocalDateTime.of(2026, 1, 1, 0, 0);
+
+        TeamMember member = mock(TeamMember.class);
+        when(member.getUser()).thenReturn(user);
+        when(member.getJoinedAt()).thenReturn(joinedAt);
+
+        when(teamMemberRepository.findActiveTeamMembersByTeamId(100L)).thenReturn(List.of(member));
+
+        List<TeamMemberResponse> responses = teamService.findTeamMembers(100L);
+
+        assertEquals(1, responses.size());
+        assertEquals(1L, responses.get(0).userId());
+        assertEquals("Owner User", responses.get(0).userName());
+        assertEquals(joinedAt, responses.get(0).joinedAt());
+    }
+
+    @Test
+    void findTeamMembers_複数メンバーの場合も取得できる() {
+        Team team = mockFullTeam(100L, mockTournament(), mockOwner());
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        User user1 = mock(User.class);
+        when(user1.getId()).thenReturn(1L);
+        when(user1.getName()).thenReturn("User One");
+        TeamMember member1 = mock(TeamMember.class);
+        when(member1.getUser()).thenReturn(user1);
+        when(member1.getJoinedAt()).thenReturn(LocalDateTime.of(2026, 1, 1, 0, 0));
+
+        User user2 = mock(User.class);
+        when(user2.getId()).thenReturn(2L);
+        when(user2.getName()).thenReturn("User Two");
+        TeamMember member2 = mock(TeamMember.class);
+        when(member2.getUser()).thenReturn(user2);
+        when(member2.getJoinedAt()).thenReturn(LocalDateTime.of(2026, 1, 2, 0, 0));
+
+        when(teamMemberRepository.findActiveTeamMembersByTeamId(100L))
+                .thenReturn(List.of(member1, member2));
+
+        List<TeamMemberResponse> responses = teamService.findTeamMembers(100L);
+
+        assertEquals(2, responses.size());
+        assertEquals(1L, responses.get(0).userId());
+        assertEquals("User One", responses.get(0).userName());
+        assertEquals(2L, responses.get(1).userId());
+        assertEquals("User Two", responses.get(1).userName());
+    }
+
+    @Test
+    void findTeamMembers_Teamが存在しない場合_TeamNotFoundExceptionを投げTeamMemberRepositoryは呼ばれない() {
+        when(teamRepository.findActiveTeamById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(TeamNotFoundException.class, () -> teamService.findTeamMembers(999L));
+
+        verify(teamMemberRepository, never()).findActiveTeamMembersByTeamId(any());
+    }
+
+    @Test
+    void findTeamMembers_メンバー0人の場合は空Listを返す() {
+        Team team = mockFullTeam(100L, mockTournament(), mockOwner());
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+        when(teamMemberRepository.findActiveTeamMembersByTeamId(100L)).thenReturn(List.of());
+
+        List<TeamMemberResponse> responses = teamService.findTeamMembers(100L);
+
+        assertTrue(responses.isEmpty());
     }
 }

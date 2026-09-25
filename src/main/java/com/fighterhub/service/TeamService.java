@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fighterhub.dto.TeamCreateRequest;
 import com.fighterhub.dto.TeamCreateResponse;
+import com.fighterhub.dto.TeamMemberResponse;
 import com.fighterhub.dto.TeamResponse;
 import com.fighterhub.dto.TeamUpdateRequest;
 import com.fighterhub.entity.Team;
@@ -138,6 +139,18 @@ public class TeamService {
         return toTeamResponse(team);
     }
 
+    // Teamの有効性確認(存在・delete_flag・Tournament/ownerの有効性)は
+    // findActiveTeamByIdへ委譲する。メンバー0人は正常系として空Listを返す。
+    @Transactional(readOnly = true)
+    public List<TeamMemberResponse> findTeamMembers(Long teamId) {
+        teamRepository.findActiveTeamById(teamId)
+                .orElseThrow(() -> new TeamNotFoundException(teamId));
+
+        return teamMemberRepository.findActiveTeamMembersByTeamId(teamId).stream()
+                .map(this::toTeamMemberResponse)
+                .toList();
+    }
+
     // characterRequirementsはDB上JSONBで保持しFK制約を持たないため、
     // 指定された各Character IDがM_CHARACTERSに実在するかをここで検証する。
     // null/空リストは「キャラクター条件なし」として検証をスキップする。
@@ -164,6 +177,14 @@ public class TeamService {
                 team.getRecruitmentMessage(),
                 team.getCreatedAt(),
                 team.getUpdatedAt()
+        );
+    }
+
+    private TeamMemberResponse toTeamMemberResponse(TeamMember teamMember) {
+        return new TeamMemberResponse(
+                teamMember.getUser().getId(),
+                teamMember.getUser().getName(),
+                teamMember.getJoinedAt()
         );
     }
 

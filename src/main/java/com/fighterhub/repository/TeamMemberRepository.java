@@ -32,4 +32,17 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
               AND o.deleteFlag = false
             """)
     List<TeamMember> findActiveTeamMembershipsByUserId(@Param("userId") Long userId);
+
+    // 指定Teamの有効なUser(deleteFlag=false)を持つTeamMemberをjoinedAt昇順で取得する。
+    // Teamの有効性(delete_flag/Tournament/owner)確認はTeamRepository#findActiveTeamById側の
+    // 責務のため、このクエリではteam.idの一致とUserのdeleteFlagのみを条件にする。
+    // JOIN FETCHでN+1を避け、Hibernate 7の制約に合わせFROM句のrootであるTeamMemberをSELECTする。
+    @Query("""
+            SELECT tm FROM TeamMember tm
+            JOIN FETCH tm.user u
+            WHERE tm.team.id = :teamId
+              AND u.deleteFlag = false
+            ORDER BY tm.joinedAt ASC
+            """)
+    List<TeamMember> findActiveTeamMembersByTeamId(@Param("teamId") Long teamId);
 }
