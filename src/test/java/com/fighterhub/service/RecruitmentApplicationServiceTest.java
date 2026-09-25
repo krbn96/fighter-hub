@@ -3,6 +3,7 @@ package com.fighterhub.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -31,6 +33,7 @@ import com.fighterhub.entity.User;
 import com.fighterhub.exception.CannotApplyToOwnTeamException;
 import com.fighterhub.exception.DuplicatePendingApplicationException;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
+import com.fighterhub.exception.NotTeamOwnerException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.repository.RecruitmentApplicationRepository;
 import com.fighterhub.repository.TeamMemberRepository;
@@ -223,5 +226,108 @@ class RecruitmentApplicationServiceTest {
 
         verify(userRepository, never()).findByIdAndDeleteFlagFalse(any());
         verify(recruitmentApplicationRepository, never()).save(any());
+    }
+
+    @Test
+    void findTeamApplications_ownerであれば一覧取得できResponseへ正しく変換される() {
+        User owner = mockOwner();
+        User applicant = mockApplicant();
+        Tournament tournament = mockTournament();
+        Team team = mockTeam(tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        LocalDateTime now = LocalDateTime.of(2026, 1, 1, 0, 0);
+        RecruitmentApplication application = mockSavedApplication(team, applicant, "よろしくお願いします", now);
+        when(recruitmentApplicationRepository.findByTeamIdOrderByCreatedAtDesc(100L))
+                .thenReturn(List.of(application));
+
+        List<RecruitmentApplicationResponse> responses =
+                recruitmentApplicationService.findTeamApplications(1L, 100L);
+
+        assertEquals(1, responses.size());
+        RecruitmentApplicationResponse response = responses.get(0);
+        assertEquals(500L, response.id());
+        assertEquals(100L, response.teamId());
+        assertEquals(2L, response.userId());
+        assertEquals("Applicant User", response.userName());
+        assertEquals("よろしくお願いします", response.message());
+        assertEquals(RecruitmentApplicationStatus.PENDING, response.status());
+        assertEquals(now, response.createdAt());
+        assertEquals(now, response.updatedAt());
+    }
+
+    @Test
+    void findTeamApplications_申請が0件の場合は空Listを返す() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockTeam(tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+        when(recruitmentApplicationRepository.findByTeamIdOrderByCreatedAtDesc(100L)).thenReturn(List.of());
+
+        List<RecruitmentApplicationResponse> responses =
+                recruitmentApplicationService.findTeamApplications(1L, 100L);
+
+        assertTrue(responses.isEmpty());
+    }
+
+    @Test
+    void findTeamApplications_Teamが存在しない場合_TeamNotFoundExceptionを投げる() {
+        when(teamRepository.findActiveTeamById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(
+                TeamNotFoundException.class,
+                () -> recruitmentApplicationService.findTeamApplications(1L, 999L));
+
+        verify(recruitmentApplicationRepository, never()).findByTeamIdOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    void findTeamApplications_操作Userがownerではない場合_NotTeamOwnerExceptionを投げ一覧Repositoryは呼ばれない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockTeam(tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        assertThrows(
+                NotTeamOwnerException.class,
+                () -> recruitmentApplicationService.findTeamApplications(999L, 100L));
+
+        verify(recruitmentApplicationRepository, never()).findByTeamIdOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    void findMyApplications_JWTuserIdに紐づくApplicationだけ取得しResponseへ正しく変換される() {
+        User owner = mockOwner();
+        User applicant = mockApplicant();
+        Tournament tournament = mockTournament();
+        Team team = mockTeam(tournament, owner);
+
+        LocalDateTime now = LocalDateTime.of(2026, 1, 1, 0, 0);
+        RecruitmentApplication application = mockSavedApplication(team, applicant, "よろしくお願いします", now);
+        when(recruitmentApplicationRepository.findByUser_IdOrderByCreatedAtDesc(2L))
+                .thenReturn(List.of(application));
+
+        List<RecruitmentApplicationResponse> responses = recruitmentApplicationService.findMyApplications(2L);
+
+        assertEquals(1, responses.size());
+        RecruitmentApplicationResponse response = responses.get(0);
+        assertEquals(500L, response.id());
+        assertEquals(100L, response.teamId());
+        assertEquals(2L, response.userId());
+        assertEquals("Applicant User", response.userName());
+        assertEquals("よろしくお願いします", response.message());
+        assertEquals(RecruitmentApplicationStatus.PENDING, response.status());
+    }
+
+    @Test
+    void findMyApplications_申請が0件の場合は空Listを返す() {
+        when(recruitmentApplicationRepository.findByUser_IdOrderByCreatedAtDesc(2L)).thenReturn(List.of());
+
+        List<RecruitmentApplicationResponse> responses = recruitmentApplicationService.findMyApplications(2L);
+
+        assertTrue(responses.isEmpty());
     }
 }

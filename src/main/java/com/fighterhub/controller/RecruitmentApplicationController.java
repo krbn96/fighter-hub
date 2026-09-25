@@ -2,9 +2,12 @@ package com.fighterhub.controller;
 
 import jakarta.validation.Valid;
 
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -88,5 +91,49 @@ public class RecruitmentApplicationController {
             @Valid @RequestBody RecruitmentApplicationCreateRequest request) {
         Long userId = Long.valueOf(jwt.getSubject());
         return recruitmentApplicationService.createApplication(userId, teamId, request);
+    }
+
+    @Operation(
+        summary = "チーム参加申請一覧取得",
+        description = "Team ownerが、自身のチームに届いた参加申請一覧を取得します。"
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "申請一覧取得成功"
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "認証されていない、または無効なJWT"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Team ownerではないユーザーによる取得",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "指定したチームが存在しない",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "サーバーエラー",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    @GetMapping("/{teamId}/applications")
+    public List<RecruitmentApplicationResponse> findTeamApplications(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long teamId) {
+        Long userId = Long.valueOf(jwt.getSubject());
+        return recruitmentApplicationService.findTeamApplications(userId, teamId);
     }
 }

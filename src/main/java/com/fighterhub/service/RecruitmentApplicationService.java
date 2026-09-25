@@ -1,5 +1,7 @@
 package com.fighterhub.service;
 
+import java.util.List;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,6 +14,7 @@ import com.fighterhub.entity.User;
 import com.fighterhub.exception.CannotApplyToOwnTeamException;
 import com.fighterhub.exception.DuplicatePendingApplicationException;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
+import com.fighterhub.exception.NotTeamOwnerException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
 import com.fighterhub.repository.RecruitmentApplicationRepository;
@@ -65,6 +68,27 @@ public class RecruitmentApplicationService {
         RecruitmentApplication savedApplication = recruitmentApplicationRepository.save(application);
 
         return toRecruitmentApplicationResponse(savedApplication);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RecruitmentApplicationResponse> findTeamApplications(Long userId, Long teamId) {
+        Team team = teamRepository.findActiveTeamById(teamId)
+                .orElseThrow(() -> new TeamNotFoundException(teamId));
+
+        if (!team.getOwner().getId().equals(userId)) {
+            throw new NotTeamOwnerException(userId, teamId);
+        }
+
+        return recruitmentApplicationRepository.findByTeamIdOrderByCreatedAtDesc(teamId).stream()
+                .map(this::toRecruitmentApplicationResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<RecruitmentApplicationResponse> findMyApplications(Long userId) {
+        return recruitmentApplicationRepository.findByUser_IdOrderByCreatedAtDesc(userId).stream()
+                .map(this::toRecruitmentApplicationResponse)
+                .toList();
     }
 
     private RecruitmentApplicationResponse toRecruitmentApplicationResponse(RecruitmentApplication application) {

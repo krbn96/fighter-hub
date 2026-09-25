@@ -38,6 +38,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fighterhub.controller.RecruitmentApplicationController;
+import com.fighterhub.controller.RecruitmentApplicationMeController;
 import com.fighterhub.controller.TeamController;
 import com.fighterhub.controller.UserController;
 import com.fighterhub.dto.UserMeResponse;
@@ -48,10 +49,16 @@ import com.fighterhub.service.UserService;
 // SecurityConfigのOAuth2 Resource Server(JWT Bearer)統合を、実際のFilter Chainを通して検証する。
 // GET /api/users/{id:[0-9]+}のみpermitAllのため、GET /api/users/meはanyRequest().authenticated()
 // の対象になる。UserController#findMe(@AuthenticationPrincipal Jwt)へ接続される実在のパスである。
-// TeamController/RecruitmentApplicationControllerもスライスに含め、/api/teams系のmatcher確認を
-// 実在のハンドラー経由(200)で行えるようにする(未マッピングパスだとNoHandlerFoundExceptionが
-// GlobalExceptionHandlerの汎用ハンドラーに捕捉され500になり、permitAllの確認として不適切なため)。
-@WebMvcTest({UserController.class, TeamController.class, RecruitmentApplicationController.class})
+// TeamController/RecruitmentApplicationController/RecruitmentApplicationMeControllerもスライスに含め、
+// /api/teams・/api/applications系のmatcher確認を実在のハンドラー経由(200)で行えるようにする
+// (未マッピングパスだとNoHandlerFoundExceptionがGlobalExceptionHandlerの汎用ハンドラーに
+// 捕捉され500になり、permitAllの確認として不適切なため)。
+@WebMvcTest({
+    UserController.class,
+    TeamController.class,
+    RecruitmentApplicationController.class,
+    RecruitmentApplicationMeController.class
+})
 @Import({SecurityConfig.class, JwtConfig.class})
 @TestPropertySource(properties = {
         "jwt.secret=" + SecurityConfigTest.TEST_ONLY_JWT_SECRET,
@@ -247,6 +254,20 @@ class SecurityConfigTest {
         mockMvc.perform(post("/api/teams/1/applications")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // GET /api/teams/{id:[0-9]+}はパスの末尾がid単独の場合のみ一致するmatcherのため、
+    // /api/teams/1/applicationsのような追加セグメントを含むパスには一致しないことを確認する。
+    @Test
+    void GET_apiTeams数値idapplicationsは認証なしでは401を返しpermitAllにならない() throws Exception {
+        mockMvc.perform(get("/api/teams/1/applications"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void GET_apiApplicationsMeは認証なしでは401を返しpermitAllにならない() throws Exception {
+        mockMvc.perform(get("/api/applications/me"))
                 .andExpect(status().isUnauthorized());
     }
 

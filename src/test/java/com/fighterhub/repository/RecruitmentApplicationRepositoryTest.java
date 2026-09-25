@@ -171,6 +171,112 @@ class RecruitmentApplicationRepositoryTest {
         assertNull(found.get().getMessage());
     }
 
+    @Test
+    void findByTeamIdOrderByCreatedAtDesc_指定Teamの全status申請をcreatedAt降順で取得できる() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        User otherOwner = createUser(characterId);
+        User applicant = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        Team otherTeam = createTeam(tournament, otherOwner);
+
+        RecruitmentApplication oldest = createRecruitmentApplication(team, applicant, "1件目");
+        RecruitmentApplication middle = createRecruitmentApplication(team, applicant, "2件目");
+        RecruitmentApplication newest = createRecruitmentApplication(team, applicant, "3件目");
+        // 別Teamへの申請は結果に含まれないことの確認用。
+        createRecruitmentApplication(otherTeam, applicant, "別Teamへの申請");
+
+        updateCreatedAt(oldest.getId(), LocalDateTime.now().minusHours(3));
+        updateCreatedAt(middle.getId(), LocalDateTime.now().minusHours(2));
+        updateCreatedAt(newest.getId(), LocalDateTime.now().minusHours(1));
+        updateStatus(middle.getId(), RecruitmentApplicationStatus.APPROVED);
+        updateStatus(newest.getId(), RecruitmentApplicationStatus.REJECTED);
+
+        List<RecruitmentApplication> found =
+                recruitmentApplicationRepository.findByTeamIdOrderByCreatedAtDesc(team.getId());
+
+        assertEquals(
+                List.of(newest.getId(), middle.getId(), oldest.getId()),
+                found.stream().map(RecruitmentApplication::getId).toList());
+        assertEquals(
+                List.of(
+                        RecruitmentApplicationStatus.REJECTED,
+                        RecruitmentApplicationStatus.APPROVED,
+                        RecruitmentApplicationStatus.PENDING),
+                found.stream().map(RecruitmentApplication::getStatus).toList());
+    }
+
+    @Test
+    void findByTeamIdOrderByCreatedAtDesc_申請が0件の場合は空Listを返す() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+
+        List<RecruitmentApplication> found =
+                recruitmentApplicationRepository.findByTeamIdOrderByCreatedAtDesc(team.getId());
+
+        assertTrue(found.isEmpty());
+    }
+
+    @Test
+    void findByUser_IdOrderByCreatedAtDesc_指定Userの複数Teamへの全status申請をcreatedAt降順で取得できる() {
+        Long characterId = anyExistingCharacterId();
+        User owner1 = createUser(characterId);
+        User owner2 = createUser(characterId);
+        User applicant = createUser(characterId);
+        User otherUser = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team1 = createTeam(tournament, owner1);
+        Team team2 = createTeam(tournament, owner2);
+
+        RecruitmentApplication oldest = createRecruitmentApplication(team1, applicant, "1件目");
+        RecruitmentApplication middle = createRecruitmentApplication(team2, applicant, "2件目");
+        RecruitmentApplication newest = createRecruitmentApplication(team1, applicant, "3件目");
+        // 別Userの申請は結果に含まれないことの確認用。
+        createRecruitmentApplication(team1, otherUser, "別Userの申請");
+
+        updateCreatedAt(oldest.getId(), LocalDateTime.now().minusHours(3));
+        updateCreatedAt(middle.getId(), LocalDateTime.now().minusHours(2));
+        updateCreatedAt(newest.getId(), LocalDateTime.now().minusHours(1));
+        updateStatus(middle.getId(), RecruitmentApplicationStatus.APPROVED);
+        updateStatus(newest.getId(), RecruitmentApplicationStatus.REJECTED);
+
+        List<RecruitmentApplication> found =
+                recruitmentApplicationRepository.findByUser_IdOrderByCreatedAtDesc(applicant.getId());
+
+        assertEquals(
+                List.of(newest.getId(), middle.getId(), oldest.getId()),
+                found.stream().map(RecruitmentApplication::getId).toList());
+        assertEquals(
+                List.of(team1.getId(), team2.getId(), team1.getId()),
+                found.stream().map(a -> a.getTeam().getId()).toList());
+    }
+
+    @Test
+    void findByUser_IdOrderByCreatedAtDesc_申請が0件の場合は空Listを返す() {
+        Long characterId = anyExistingCharacterId();
+        User applicant = createUser(characterId);
+
+        List<RecruitmentApplication> found =
+                recruitmentApplicationRepository.findByUser_IdOrderByCreatedAtDesc(applicant.getId());
+
+        assertTrue(found.isEmpty());
+    }
+
+    private void updateCreatedAt(Long applicationId, LocalDateTime createdAt) {
+        jdbcTemplate.update(
+                "UPDATE t_recruitment_application SET created_at = ? WHERE id = ?",
+                createdAt, applicationId);
+    }
+
+    private void updateStatus(Long applicationId, RecruitmentApplicationStatus status) {
+        jdbcTemplate.update(
+                "UPDATE t_recruitment_application SET status = ? WHERE id = ?",
+                status.name(), applicationId);
+    }
+
     private Long anyExistingCharacterId() {
         List<Character> characters = characterRepository.findAll();
         assumeFalse(characters.isEmpty(), "M_CHARACTERSにデータが存在しないため統合テストをスキップする");

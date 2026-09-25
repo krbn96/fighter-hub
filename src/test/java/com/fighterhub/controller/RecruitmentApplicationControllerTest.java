@@ -6,12 +6,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +33,7 @@ import com.fighterhub.entity.RecruitmentApplicationStatus;
 import com.fighterhub.exception.CannotApplyToOwnTeamException;
 import com.fighterhub.exception.DuplicatePendingApplicationException;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
+import com.fighterhub.exception.NotTeamOwnerException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.service.RecruitmentApplicationService;
 
@@ -170,5 +173,67 @@ class RecruitmentApplicationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void findTeamApplications_ownerJWTありの場合_200を返しJWTのsubjectとPathのteamIdでfindTeamApplicationsが呼ばれる() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        when(recruitmentApplicationService.findTeamApplications(1L, 100L))
+                .thenReturn(List.of(sampleResponse("よろしくお願いします")));
+
+        mockMvc.perform(get("/api/teams/100/applications")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(500))
+                .andExpect(jsonPath("$[0].teamId").value(100))
+                .andExpect(jsonPath("$[0].userId").value(2))
+                .andExpect(jsonPath("$[0].message").value("よろしくお願いします"));
+
+        verify(recruitmentApplicationService, times(1)).findTeamApplications(1L, 100L);
+    }
+
+    @Test
+    void findTeamApplications_申請が0件の場合_200と空配列を返す() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        when(recruitmentApplicationService.findTeamApplications(1L, 100L)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/teams/100/applications")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void findTeamApplications_JWTなしの場合_401を返しfindTeamApplicationsは呼ばれない() throws Exception {
+        mockMvc.perform(get("/api/teams/100/applications"))
+                .andExpect(status().isUnauthorized());
+
+        verify(recruitmentApplicationService, never()).findTeamApplications(any(), any());
+    }
+
+    @Test
+    void findTeamApplications_ServiceがNotTeamOwnerExceptionを投げた場合_403を返す() throws Exception {
+        Jwt jwt = validJwt("999");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        when(recruitmentApplicationService.findTeamApplications(999L, 100L))
+                .thenThrow(new NotTeamOwnerException(999L, 100L));
+
+        mockMvc.perform(get("/api/teams/100/applications")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void findTeamApplications_ServiceがTeamNotFoundExceptionを投げた場合_404を返す() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        when(recruitmentApplicationService.findTeamApplications(1L, 999L))
+                .thenThrow(new TeamNotFoundException(999L));
+
+        mockMvc.perform(get("/api/teams/999/applications")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isNotFound());
     }
 }
