@@ -10,11 +10,15 @@ import com.fighterhub.dto.RecruitmentApplicationResponse;
 import com.fighterhub.entity.RecruitmentApplication;
 import com.fighterhub.entity.RecruitmentApplicationStatus;
 import com.fighterhub.entity.Team;
+import com.fighterhub.entity.TeamMember;
 import com.fighterhub.entity.User;
+import com.fighterhub.exception.ApplicationAlreadyProcessedException;
 import com.fighterhub.exception.CannotApplyToOwnTeamException;
 import com.fighterhub.exception.DuplicatePendingApplicationException;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
 import com.fighterhub.exception.NotTeamOwnerException;
+import com.fighterhub.exception.RecruitmentApplicationNotFoundException;
+import com.fighterhub.exception.TeamFullException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
 import com.fighterhub.repository.RecruitmentApplicationRepository;
@@ -89,6 +93,73 @@ public class RecruitmentApplicationService {
         return recruitmentApplicationRepository.findByUser_IdOrderByCreatedAtDesc(userId).stream()
                 .map(this::toRecruitmentApplicationResponse)
                 .toList();
+    }
+
+    // TeamMember作成とApplicationのAPPROVED変更は同一Transaction内で行い、
+    // 片方だけ成功する状態を作らない。
+    @Transactional
+    public RecruitmentApplicationResponse approveApplication(Long currentUserId, Long teamId, Long applicationId) {
+        Team team = teamRepository.findActiveTeamById(teamId)
+                .orElseThrow(() -> new TeamNotFoundException(teamId));
+
+        if (!team.getOwner().getId().equals(currentUserId)) {
+            throw new NotTeamOwnerException(currentUserId, teamId);
+        }
+
+        RecruitmentApplication application = recruitmentApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new RecruitmentApplicationNotFoundException(teamId, applicationId));
+
+        // 別TeamのApplicationであることを外部へ公開しないため、404として扱う。
+        if (!application.getTeam().getId().equals(teamId)) {
+            throw new RecruitmentApplicationNotFoundException(teamId, applicationId);
+        }
+
+        if (application.getStatus() != RecruitmentApplicationStatus.PENDING) {
+            throw new ApplicationAlreadyProcessedException(applicationId);
+        }
+
+        // 申請から承認までの間に別Teamへ加入している可能性があるため、承認時にも再確認する。
+        if (teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(
+                application.getUser().getId(), team.getTournament().getId())) {
+            throw new DuplicateTournamentMembershipException(
+                    application.getUser().getId(), team.getTournament().getId());
+        }
+
+        long currentMemberCount = teamMemberRepository.countByTeam_Id(teamId);
+        if (currentMemberCount >= team.getTournament().getTeamSize()) {
+            throw new TeamFullException(teamId);
+        }
+
+        teamMemberRepository.save(TeamMember.create(team, application.getUser()));
+
+        application.approve();
+
+        return toRecruitmentApplicationResponse(application);
+    }
+
+    @Transactional
+    public RecruitmentApplicationResponse rejectApplication(Long currentUserId, Long teamId, Long applicationId) {
+        Team team = teamRepository.findActiveTeamById(teamId)
+                .orElseThrow(() -> new TeamNotFoundException(teamId));
+
+        if (!team.getOwner().getId().equals(currentUserId)) {
+            throw new NotTeamOwnerException(currentUserId, teamId);
+        }
+
+        RecruitmentApplication application = recruitmentApplicationRepository.findById(applicationId)
+                .orElseThrow(() -> new RecruitmentApplicationNotFoundException(teamId, applicationId));
+
+        if (!application.getTeam().getId().equals(teamId)) {
+            throw new RecruitmentApplicationNotFoundException(teamId, applicationId);
+        }
+
+        if (application.getStatus() != RecruitmentApplicationStatus.PENDING) {
+            throw new ApplicationAlreadyProcessedException(applicationId);
+        }
+
+        application.reject();
+
+        return toRecruitmentApplicationResponse(application);
     }
 
     private RecruitmentApplicationResponse toRecruitmentApplicationResponse(RecruitmentApplication application) {

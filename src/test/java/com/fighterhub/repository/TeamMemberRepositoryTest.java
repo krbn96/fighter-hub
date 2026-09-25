@@ -97,6 +97,32 @@ class TeamMemberRepositoryTest {
     }
 
     @Test
+    void countByTeam_Id_指定Teamの人数を取得しownerも含む別Teamは含めない() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        User member = createUser(characterId);
+        User otherOwner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        Team otherTeam = createTeam(tournament, otherOwner);
+        createTeamMember(team, owner);
+        createTeamMember(team, member);
+        createTeamMember(otherTeam, otherOwner);
+
+        assertEquals(2L, teamMemberRepository.countByTeam_Id(team.getId()));
+    }
+
+    @Test
+    void countByTeam_Id_メンバーが0人の場合は0を返す() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+
+        assertEquals(0L, teamMemberRepository.countByTeam_Id(team.getId()));
+    }
+
+    @Test
     void findByTeam_IdAndUser_Id_teamIdとuserIdが一致する場合TeamMemberを取得できる() {
         Long characterId = anyExistingCharacterId();
         User owner = createUser(characterId);

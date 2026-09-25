@@ -17,6 +17,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
+import com.fighterhub.exception.ApplicationAlreadyProcessedException;
+
 @Entity
 @Table(name = "t_recruitment_application")
 public class RecruitmentApplication {
@@ -51,8 +53,7 @@ public class RecruitmentApplication {
     protected RecruitmentApplication() {
     }
 
-    // 新規申請は常にPENDINGで生成する。APPROVED/REJECTEDへの状態変更メソッドは
-    // Day 5の承認・拒否処理で業務ルールと合わせて実装するため、ここでは追加しない。
+    // 新規申請は常にPENDINGで生成する。
     public static RecruitmentApplication create(Team team, User user, String message) {
         RecruitmentApplication application = new RecruitmentApplication();
         application.team = team;
@@ -61,6 +62,22 @@ public class RecruitmentApplication {
         application.status = RecruitmentApplicationStatus.PENDING;
 
         return application;
+    }
+
+    // PENDINGからのみAPPROVEDへ遷移できる。APPROVED/REJECTEDからの再変更は禁止する。
+    public void approve() {
+        if (status != RecruitmentApplicationStatus.PENDING) {
+            throw new ApplicationAlreadyProcessedException(id);
+        }
+        this.status = RecruitmentApplicationStatus.APPROVED;
+    }
+
+    // PENDINGからのみREJECTEDへ遷移できる。APPROVED/REJECTEDからの再変更は禁止する。
+    public void reject() {
+        if (status != RecruitmentApplicationStatus.PENDING) {
+            throw new ApplicationAlreadyProcessedException(id);
+        }
+        this.status = RecruitmentApplicationStatus.REJECTED;
     }
 
     public Long getId() {

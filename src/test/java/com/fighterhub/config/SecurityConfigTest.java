@@ -257,6 +257,20 @@ class SecurityConfigTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    // PATCH /api/teams/{teamId}/applications/{applicationId}/approve|rejectはpermitAll matcherに
+    // 一致しないパスのため、anyRequest().authenticated()の対象になることを確認する。
+    @Test
+    void PATCH_apiTeams数値idapplications数値idapproveは認証なしでは401を返しpermitAllにならない() throws Exception {
+        mockMvc.perform(patch("/api/teams/1/applications/1/approve"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void PATCH_apiTeams数値idapplications数値idrejectは認証なしでは401を返しpermitAllにならない() throws Exception {
+        mockMvc.perform(patch("/api/teams/1/applications/1/reject"))
+                .andExpect(status().isUnauthorized());
+    }
+
     // GET /api/teams/{id:[0-9]+}はパスの末尾がid単独の場合のみ一致するmatcherのため、
     // /api/teams/1/applicationsのような追加セグメントを含むパスには一致しないことを確認する。
     @Test

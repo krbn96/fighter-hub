@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -135,5 +136,115 @@ public class RecruitmentApplicationController {
             @PathVariable Long teamId) {
         Long userId = Long.valueOf(jwt.getSubject());
         return recruitmentApplicationService.findTeamApplications(userId, teamId);
+    }
+
+    @Operation(
+        summary = "チーム参加申請承認",
+        description = "Team ownerが、自身のチームへの参加申請を承認しTeamMemberとして追加します。"
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "承認成功",
+            content = @Content(
+                schema = @Schema(implementation = RecruitmentApplicationResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "認証されていない、または無効なJWT"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Team ownerではないユーザーによる承認",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "指定したチームまたは参加申請が存在しない",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "参加申請が処理済み、同一大会内ですでにいずれかのチームへ所属している、またはチームが定員に達している",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "サーバーエラー",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    @PatchMapping("/{teamId}/applications/{applicationId}/approve")
+    public RecruitmentApplicationResponse approveApplication(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long teamId,
+            @PathVariable Long applicationId) {
+        Long currentUserId = Long.valueOf(jwt.getSubject());
+        return recruitmentApplicationService.approveApplication(currentUserId, teamId, applicationId);
+    }
+
+    @Operation(
+        summary = "チーム参加申請拒否",
+        description = "Team ownerが、自身のチームへの参加申請を拒否します。"
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "拒否成功",
+            content = @Content(
+                schema = @Schema(implementation = RecruitmentApplicationResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "認証されていない、または無効なJWT"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Team ownerではないユーザーによる拒否",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "指定したチームまたは参加申請が存在しない",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "参加申請が処理済み",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "サーバーエラー",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    @PatchMapping("/{teamId}/applications/{applicationId}/reject")
+    public RecruitmentApplicationResponse rejectApplication(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long teamId,
+            @PathVariable Long applicationId) {
+        Long currentUserId = Long.valueOf(jwt.getSubject());
+        return recruitmentApplicationService.rejectApplication(currentUserId, teamId, applicationId);
     }
 }

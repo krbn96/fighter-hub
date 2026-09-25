@@ -14,6 +14,9 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
     // 同じTeamへの二重所属確認
     boolean existsByTeam_IdAndUser_Id(Long teamId, Long userId);
 
+    // Team定員チェック用。ownerも含めた現在のTeamMember数を取得する。
+    long countByTeam_Id(Long teamId);
+
     // teamId+userIdで一意に絞り込めるため、JOIN FETCH不要のderived query。
     Optional<TeamMember> findByTeam_IdAndUser_Id(Long teamId, Long userId);
 

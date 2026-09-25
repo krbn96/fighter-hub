@@ -2,11 +2,14 @@ package com.fighterhub.entity;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+
+import com.fighterhub.exception.ApplicationAlreadyProcessedException;
 
 class RecruitmentApplicationTest {
 
@@ -60,5 +63,43 @@ class RecruitmentApplicationTest {
         RecruitmentApplication application = RecruitmentApplication.create(newTeam(), newApplicant(), null);
 
         assertNull(application.getMessage());
+    }
+
+    @Test
+    void approve_PENDINGからAPPROVEDへ遷移できる() {
+        RecruitmentApplication application = RecruitmentApplication.create(newTeam(), newApplicant(), null);
+
+        application.approve();
+
+        assertEquals(RecruitmentApplicationStatus.APPROVED, application.getStatus());
+    }
+
+    @Test
+    void reject_PENDINGからREJECTEDへ遷移できる() {
+        RecruitmentApplication application = RecruitmentApplication.create(newTeam(), newApplicant(), null);
+
+        application.reject();
+
+        assertEquals(RecruitmentApplicationStatus.REJECTED, application.getStatus());
+    }
+
+    @Test
+    void APPROVED状態からのapprove_rejectはいずれもApplicationAlreadyProcessedExceptionを投げる() {
+        RecruitmentApplication application = RecruitmentApplication.create(newTeam(), newApplicant(), null);
+        application.approve();
+
+        assertThrows(ApplicationAlreadyProcessedException.class, application::approve);
+        assertThrows(ApplicationAlreadyProcessedException.class, application::reject);
+        assertEquals(RecruitmentApplicationStatus.APPROVED, application.getStatus());
+    }
+
+    @Test
+    void REJECTED状態からのapprove_rejectはいずれもApplicationAlreadyProcessedExceptionを投げる() {
+        RecruitmentApplication application = RecruitmentApplication.create(newTeam(), newApplicant(), null);
+        application.reject();
+
+        assertThrows(ApplicationAlreadyProcessedException.class, application::approve);
+        assertThrows(ApplicationAlreadyProcessedException.class, application::reject);
+        assertEquals(RecruitmentApplicationStatus.REJECTED, application.getStatus());
     }
 }
