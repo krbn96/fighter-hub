@@ -6,6 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -223,6 +224,14 @@ class SecurityConfigTest {
         mockMvc.perform(post("/api/teams")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    // DELETEはGET専用のpermitAll matcher(/api/teams/{id:[0-9]+}/members)に一致しないため、
+    // anyRequest().authenticated()の対象になることを確認する。
+    @Test
+    void DELETE_apiTeams数値idmembers数値idは認証なしでは401を返しpermitAllにならない() throws Exception {
+        mockMvc.perform(delete("/api/teams/1/members/2"))
                 .andExpect(status().isUnauthorized());
     }
 

@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -267,5 +268,58 @@ public class TeamController {
     public List<TeamResponse> findMyTeams(@AuthenticationPrincipal Jwt jwt) {
         Long userId = Long.valueOf(jwt.getSubject());
         return teamService.findMyTeams(userId);
+    }
+
+    @Operation(
+        summary = "チームメンバー削除",
+        description = "Team ownerが指定したメンバーをチームから削除します。"
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "204",
+            description = "削除成功"
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "認証されていない、または無効なJWT"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "Team ownerではないユーザーによる削除",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "指定したチーム、または指定したメンバーが存在しない",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "409",
+            description = "Team owner自身を削除しようとした",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "サーバーエラー",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @DeleteMapping("/{teamId}/members/{userId}")
+    public void removeTeamMember(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long teamId,
+            @PathVariable Long userId) {
+        Long currentUserId = Long.valueOf(jwt.getSubject());
+        teamService.removeTeamMember(currentUserId, teamId, userId);
     }
 }

@@ -5,10 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -37,6 +39,9 @@ import com.fighterhub.dto.TeamCreateResponse;
 import com.fighterhub.dto.TeamMemberResponse;
 import com.fighterhub.dto.TeamResponse;
 import com.fighterhub.dto.TeamUpdateRequest;
+import com.fighterhub.exception.CannotRemoveTeamOwnerException;
+import com.fighterhub.exception.NotTeamOwnerException;
+import com.fighterhub.exception.TeamMemberNotFoundException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.service.TeamService;
 
@@ -383,5 +388,74 @@ class TeamControllerTest {
         assertFalse(capturedRequest.recruitmentMessage().isUndefined());
         assertTrue(capturedRequest.recruitmentMessage().isPresent());
         assertEquals(null, capturedRequest.recruitmentMessage().get());
+    }
+
+    @Test
+    void removeTeamMember_ownerJWTありの場合_204を返しJWTのsubjectとPathのidでremoveTeamMemberが呼ばれる() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+
+        mockMvc.perform(delete("/api/teams/1/members/2")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isNoContent())
+                .andExpect(jsonPath("$").doesNotExist());
+
+        verify(teamService, times(1)).removeTeamMember(1L, 1L, 2L);
+    }
+
+    @Test
+    void removeTeamMember_JWTなしの場合_401を返しremoveTeamMemberは呼ばれない() throws Exception {
+        mockMvc.perform(delete("/api/teams/1/members/2"))
+                .andExpect(status().isUnauthorized());
+
+        verify(teamService, never()).removeTeamMember(any(), any(), any());
+    }
+
+    @Test
+    void removeTeamMember_TeamServiceがNotTeamOwnerExceptionを投げた場合_403を返す() throws Exception {
+        Jwt jwt = validJwt("999");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        doThrow(new NotTeamOwnerException(999L, 1L))
+                .when(teamService).removeTeamMember(999L, 1L, 2L);
+
+        mockMvc.perform(delete("/api/teams/1/members/2")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void removeTeamMember_TeamServiceがTeamNotFoundExceptionを投げた場合_404を返す() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        doThrow(new TeamNotFoundException(999L))
+                .when(teamService).removeTeamMember(1L, 999L, 2L);
+
+        mockMvc.perform(delete("/api/teams/999/members/2")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void removeTeamMember_TeamServiceがTeamMemberNotFoundExceptionを投げた場合_404を返す() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        doThrow(new TeamMemberNotFoundException(1L, 999L))
+                .when(teamService).removeTeamMember(1L, 1L, 999L);
+
+        mockMvc.perform(delete("/api/teams/1/members/999")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void removeTeamMember_TeamServiceがCannotRemoveTeamOwnerExceptionを投げた場合_409を返す() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        doThrow(new CannotRemoveTeamOwnerException(1L, 1L))
+                .when(teamService).removeTeamMember(1L, 1L, 1L);
+
+        mockMvc.perform(delete("/api/teams/1/members/1")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isConflict());
     }
 }
