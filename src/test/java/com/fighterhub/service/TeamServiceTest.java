@@ -33,9 +33,11 @@ import com.fighterhub.entity.Team;
 import com.fighterhub.entity.TeamMember;
 import com.fighterhub.entity.Tournament;
 import com.fighterhub.entity.User;
+import com.fighterhub.exception.CannotRemoveTeamOwnerException;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
 import com.fighterhub.exception.InvalidRequestException;
 import com.fighterhub.exception.NotTeamOwnerException;
+import com.fighterhub.exception.TeamMemberNotFoundException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.exception.TournamentNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
@@ -563,5 +565,81 @@ class TeamServiceTest {
         List<TeamMemberResponse> responses = teamService.findTeamMembers(100L);
 
         assertTrue(responses.isEmpty());
+    }
+
+    @Test
+    void removeTeamMember_ownerが一般メンバーを削除する場合_TeamMemberが削除される() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        TeamMember targetTeamMember = mock(TeamMember.class);
+        when(teamMemberRepository.findByTeam_IdAndUser_Id(100L, 2L)).thenReturn(Optional.of(targetTeamMember));
+
+        teamService.removeTeamMember(1L, 100L, 2L);
+
+        verify(teamMemberRepository, times(1)).delete(targetTeamMember);
+    }
+
+    @Test
+    void removeTeamMember_Teamが存在しない場合_TeamNotFoundExceptionを投げTeamMemberは検索削除されない() {
+        when(teamRepository.findActiveTeamById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(
+                TeamNotFoundException.class,
+                () -> teamService.removeTeamMember(1L, 999L, 2L));
+
+        verify(teamMemberRepository, never()).findByTeam_IdAndUser_Id(any(), any());
+        verify(teamMemberRepository, never()).delete(any());
+    }
+
+    @Test
+    void removeTeamMember_操作Userがownerではない場合_NotTeamOwnerExceptionを投げTeamMemberは検索削除されない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        assertThrows(
+                NotTeamOwnerException.class,
+                () -> teamService.removeTeamMember(999L, 100L, 2L));
+
+        verify(teamMemberRepository, never()).findByTeam_IdAndUser_Id(any(), any());
+        verify(teamMemberRepository, never()).delete(any());
+    }
+
+    @Test
+    void removeTeamMember_owner自身を削除しようとした場合_CannotRemoveTeamOwnerExceptionを投げTeamMemberは検索削除されない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        assertThrows(
+                CannotRemoveTeamOwnerException.class,
+                () -> teamService.removeTeamMember(1L, 100L, 1L));
+
+        verify(teamMemberRepository, never()).findByTeam_IdAndUser_Id(any(), any());
+        verify(teamMemberRepository, never()).delete(any());
+    }
+
+    @Test
+    void removeTeamMember_対象TeamMemberが存在しない場合_TeamMemberNotFoundExceptionを投げ削除されない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+        when(teamMemberRepository.findByTeam_IdAndUser_Id(100L, 999L)).thenReturn(Optional.empty());
+
+        assertThrows(
+                TeamMemberNotFoundException.class,
+                () -> teamService.removeTeamMember(1L, 100L, 999L));
+
+        verify(teamMemberRepository, never()).delete(any());
     }
 }

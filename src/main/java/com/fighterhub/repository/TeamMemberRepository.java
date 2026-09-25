@@ -1,6 +1,7 @@
 package com.fighterhub.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -12,6 +13,9 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
 
     // 同じTeamへの二重所属確認
     boolean existsByTeam_IdAndUser_Id(Long teamId, Long userId);
+
+    // teamId+userIdで一意に絞り込めるため、JOIN FETCH不要のderived query。
+    Optional<TeamMember> findByTeam_IdAndUser_Id(Long teamId, Long userId);
 
     // 同一Tournamentで1ユーザー1Teamの所属確認
     boolean existsByUser_IdAndTeam_Tournament_Id(Long userId, Long tournamentId);

@@ -14,9 +14,11 @@ import com.fighterhub.entity.Team;
 import com.fighterhub.entity.TeamMember;
 import com.fighterhub.entity.Tournament;
 import com.fighterhub.entity.User;
+import com.fighterhub.exception.CannotRemoveTeamOwnerException;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
 import com.fighterhub.exception.InvalidRequestException;
 import com.fighterhub.exception.NotTeamOwnerException;
+import com.fighterhub.exception.TeamMemberNotFoundException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.exception.TournamentNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
@@ -107,12 +109,7 @@ public class TeamService {
 
     @Transactional
     public TeamResponse updateTeam(Long userId, Long teamId, TeamUpdateRequest request) {
-        Team team = teamRepository.findActiveTeamById(teamId)
-                .orElseThrow(() -> new TeamNotFoundException(teamId));
-
-        if (!team.getOwner().getId().equals(userId)) {
-            throw new NotTeamOwnerException(userId, teamId);
-        }
+        Team team = getTeamOwnedBy(userId, teamId);
 
         if (!request.name().isUndefined()) {
             team.updateName(request.name().get());
@@ -149,6 +146,33 @@ public class TeamService {
         return teamMemberRepository.findActiveTeamMembersByTeamId(teamId).stream()
                 .map(this::toTeamMemberResponse)
                 .toList();
+    }
+
+    @Transactional
+    public void removeTeamMember(Long userId, Long teamId, Long targetUserId) {
+        Team team = getTeamOwnedBy(userId, teamId);
+
+        if (targetUserId.equals(team.getOwner().getId())) {
+            throw new CannotRemoveTeamOwnerException(teamId, targetUserId);
+        }
+
+        TeamMember teamMember = teamMemberRepository.findByTeam_IdAndUser_Id(teamId, targetUserId)
+                .orElseThrow(() -> new TeamMemberNotFoundException(teamId, targetUserId));
+
+        teamMemberRepository.delete(teamMember);
+    }
+
+    // Teamの存在確認とowner判定を共通化するhelper。
+    // updateTeam / removeTeamMemberの両方から利用する。
+    private Team getTeamOwnedBy(Long userId, Long teamId) {
+        Team team = teamRepository.findActiveTeamById(teamId)
+                .orElseThrow(() -> new TeamNotFoundException(teamId));
+
+        if (!team.getOwner().getId().equals(userId)) {
+            throw new NotTeamOwnerException(userId, teamId);
+        }
+
+        return team;
     }
 
     // characterRequirementsはDB上JSONBで保持しFK制約を持たないため、

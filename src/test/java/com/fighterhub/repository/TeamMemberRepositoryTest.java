@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterEach;
@@ -93,6 +94,36 @@ class TeamMemberRepositoryTest {
 
         assertTrue(teamMemberRepository.existsByTeam_IdAndUser_Id(team.getId(), owner.getId()));
         assertFalse(teamMemberRepository.existsByTeam_IdAndUser_Id(team.getId(), otherUser.getId()));
+    }
+
+    @Test
+    void findByTeam_IdAndUser_Id_teamIdとuserIdが一致する場合TeamMemberを取得できる() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        createTeamMember(team, owner);
+
+        Optional<TeamMember> found = teamMemberRepository.findByTeam_IdAndUser_Id(team.getId(), owner.getId());
+
+        assertTrue(found.isPresent());
+        assertEquals(team.getId(), found.get().getTeam().getId());
+        assertEquals(owner.getId(), found.get().getUser().getId());
+    }
+
+    @Test
+    void findByTeam_IdAndUser_Id_別Teamまたは別Userを指定した場合は取得できない() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        User otherUser = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        Team otherTeam = createTeam(tournament, otherUser);
+        createTeamMember(team, owner);
+        createTeamMember(otherTeam, otherUser);
+
+        assertTrue(teamMemberRepository.findByTeam_IdAndUser_Id(otherTeam.getId(), owner.getId()).isEmpty());
+        assertTrue(teamMemberRepository.findByTeam_IdAndUser_Id(team.getId(), otherUser.getId()).isEmpty());
     }
 
     @Test
