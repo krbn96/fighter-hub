@@ -34,8 +34,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.fighterhub.config.SecurityConfig;
 import com.fighterhub.dto.TeamCreateRequest;
 import com.fighterhub.dto.TeamCreateResponse;
+import com.fighterhub.dto.TeamMemberResponse;
 import com.fighterhub.dto.TeamResponse;
 import com.fighterhub.dto.TeamUpdateRequest;
+import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.service.TeamService;
 
 @WebMvcTest(TeamController.class)
@@ -256,6 +258,44 @@ class TeamControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(teamService, never()).createTeam(any(), any());
+    }
+
+    @Test
+    void findTeamMembers_認証なしで200を返し指定idでfindTeamMembersが呼ばれる() throws Exception {
+        TeamMemberResponse member = new TeamMemberResponse(
+                1L, "Owner User", LocalDateTime.of(2026, 1, 1, 0, 0));
+        when(teamService.findTeamMembers(1L)).thenReturn(List.of(member));
+
+        mockMvc.perform(get("/api/teams/1/members"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].userId").value(1))
+                .andExpect(jsonPath("$[0].userName").value("Owner User"))
+                .andExpect(jsonPath("$[0].joinedAt").exists());
+
+        verify(teamService, times(1)).findTeamMembers(1L);
+    }
+
+    @Test
+    void findTeamMembers_メンバー0人の場合_200と空Listを返す() throws Exception {
+        when(teamService.findTeamMembers(1L)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/teams/1/members"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        verify(teamService, times(1)).findTeamMembers(1L);
+    }
+
+    @Test
+    void findTeamMembers_TeamServiceがTeamNotFoundExceptionを投げた場合_404を返す() throws Exception {
+        when(teamService.findTeamMembers(999L)).thenThrow(new TeamNotFoundException(999L));
+
+        mockMvc.perform(get("/api/teams/999/members"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message").value("Team not found. id=999"))
+                .andExpect(jsonPath("$.path").value("/api/teams/999/members"));
     }
 
     @Test

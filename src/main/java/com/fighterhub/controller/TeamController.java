@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fighterhub.dto.ErrorResponse;
 import com.fighterhub.dto.TeamCreateRequest;
 import com.fighterhub.dto.TeamCreateResponse;
+import com.fighterhub.dto.TeamMemberResponse;
 import com.fighterhub.dto.TeamResponse;
 import com.fighterhub.dto.TeamUpdateRequest;
 import com.fighterhub.service.TeamService;
@@ -147,6 +148,35 @@ public class TeamController {
     @GetMapping("/{id}")
     public TeamResponse findTeamById(@PathVariable Long id) {
         return teamService.findTeamById(id);
+    }
+
+    @Operation(
+        summary = "チームメンバー一覧取得",
+        description = "指定したチームに所属しているメンバーの一覧を取得します。"
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "取得成功"
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "指定したチームが存在しない",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "サーバーエラー",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    @GetMapping("/{id}/members")
+    public List<TeamMemberResponse> findTeamMembers(@PathVariable Long id) {
+        return teamService.findTeamMembers(id);
     }
 
     @Operation(

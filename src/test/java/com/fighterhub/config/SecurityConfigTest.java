@@ -205,6 +205,14 @@ class SecurityConfigTest {
     }
 
     @Test
+    void GET_apiTeams数値idmembersは認証なしでpermitAllとなる() throws Exception {
+        when(teamService.findTeamMembers(1L)).thenReturn(java.util.List.of());
+
+        mockMvc.perform(get("/api/teams/1/members"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void GET_apiTeamsMyは認証なしでは401を返しpermitAllにならない() throws Exception {
         mockMvc.perform(get("/api/teams/my"))
                 .andExpect(status().isUnauthorized());

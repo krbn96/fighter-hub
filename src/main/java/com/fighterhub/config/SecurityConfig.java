@@ -39,6 +39,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/teams").permitAll()
                 // 数値IDのみに一致させ、/api/teams/my は対象外とする(JWT必須のまま)
                 .requestMatchers(HttpMethod.GET, "/api/teams/{id:[0-9]+}").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/teams/{id:[0-9]+}/members").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2
