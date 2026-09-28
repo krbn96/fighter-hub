@@ -307,6 +307,14 @@ class SecurityConfigTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void GET_apiTournaments数値idteamsは認証なしでpermitAllとなる() throws Exception {
+        when(teamService.findTeamsByTournament(1L)).thenReturn(java.util.List.of());
+
+        mockMvc.perform(get("/api/tournaments/1/teams"))
+                .andExpect(status().isOk());
+    }
+
     // POST /api/tournamentsはmatcherが存在しないパスのため、anyRequest().authenticated()の
     // 対象になることを確認する(Controllerに実際のPOSTハンドラーは無いが、認証フィルターは
     // ハンドラー到達前に動作するため、この確認にController側の実装有無は影響しない)。

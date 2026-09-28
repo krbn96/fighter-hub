@@ -94,6 +94,16 @@ public class TeamService {
         return toTeamResponse(team);
     }
 
+    @Transactional(readOnly = true)
+    public List<TeamResponse> findTeamsByTournament(Long tournamentId) {
+        tournamentRepository.findByIdAndDeleteFlagFalse(tournamentId)
+                .orElseThrow(() -> new TournamentNotFoundException(tournamentId));
+
+        return teamRepository.findActiveTeamsByTournamentId(tournamentId).stream()
+                .map(this::toTeamResponse)
+                .toList();
+    }
+
     // 「ownerであるTeam」ではなく、T_TEAM_MEMBERSを基準に所属しているTeamを返す。
     // ownerも自身のTeamのTeamMemberとして登録されているため、この検索だけでowner分も含まれる。
     @Transactional(readOnly = true)

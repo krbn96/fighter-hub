@@ -284,6 +284,45 @@ class TeamServiceTest {
     }
 
     @Test
+    void findTeamsByTournament_正常系の場合_有効なTeamをTeamResponseへ変換して返す() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(team));
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L);
+
+        assertEquals(1, responses.size());
+        assertEquals(100L, responses.get(0).id());
+        assertEquals("Test Cup", responses.get(0).tournamentName());
+    }
+
+    @Test
+    void findTeamsByTournament_Tournamentが存在しない場合_TournamentNotFoundExceptionを投げる() {
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(999L)).thenReturn(Optional.empty());
+
+        assertThrows(
+                TournamentNotFoundException.class,
+                () -> teamService.findTeamsByTournament(999L));
+
+        verify(teamRepository, never()).findActiveTeamsByTournamentId(any());
+    }
+
+    @Test
+    void findTeamsByTournament_該当Teamが0件の場合は空Listを返す() {
+        Tournament tournament = mockTournament();
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of());
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L);
+
+        assertTrue(responses.isEmpty());
+    }
+
+    @Test
     void findTeamById_正常に取得できる() {
         User owner = mockOwner();
         Tournament tournament = mockTournament();

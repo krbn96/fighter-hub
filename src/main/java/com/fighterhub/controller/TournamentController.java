@@ -18,9 +18,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fighterhub.dto.ErrorResponse;
+import com.fighterhub.dto.TeamResponse;
 import com.fighterhub.dto.TournamentCreateRequest;
 import com.fighterhub.dto.TournamentResponse;
 import com.fighterhub.dto.TournamentUpdateRequest;
+import com.fighterhub.service.TeamService;
 import com.fighterhub.service.TournamentService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,9 +37,11 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 public class TournamentController {
 
     private final TournamentService tournamentService;
+    private final TeamService teamService;
 
-    public TournamentController(TournamentService tournamentService) {
+    public TournamentController(TournamentService tournamentService, TeamService teamService) {
         this.tournamentService = tournamentService;
+        this.teamService = teamService;
     }
 
     @Operation(
@@ -92,6 +96,35 @@ public class TournamentController {
     @GetMapping("/{id}")
     public TournamentResponse findTournamentById(@PathVariable Long id) {
         return tournamentService.findTournamentById(id);
+    }
+
+    @Operation(
+        summary = "大会ごとのチーム一覧取得",
+        description = "指定した大会に属する有効なチームの一覧を取得します。"
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "取得成功"
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "指定した大会が存在しない",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "サーバーエラー",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    @GetMapping("/{tournamentId}/teams")
+    public List<TeamResponse> findTeamsByTournament(@PathVariable Long tournamentId) {
+        return teamService.findTeamsByTournament(tournamentId);
     }
 
     @Operation(

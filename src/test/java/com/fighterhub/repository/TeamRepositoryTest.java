@@ -118,6 +118,74 @@ class TeamRepositoryTest {
     }
 
     @Test
+    void findActiveTeamsByTournamentId_指定Tournamentの有効なTeamのみ返し別TournamentのTeamは含まない() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Tournament otherTournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        Team otherTournamentTeam = createTeam(otherTournament, owner);
+
+        List<Long> foundIds = teamRepository.findActiveTeamsByTournamentId(tournament.getId())
+                .stream().map(Team::getId).toList();
+
+        assertTrue(foundIds.contains(team.getId()));
+        assertFalse(foundIds.contains(otherTournamentTeam.getId()));
+    }
+
+    @Test
+    void findActiveTeamsByTournamentId_TeamdeleteFlagtrueは除外する() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+
+        softDeleteTeam(team.getId());
+
+        List<Long> foundIds = teamRepository.findActiveTeamsByTournamentId(tournament.getId())
+                .stream().map(Team::getId).toList();
+
+        assertFalse(foundIds.contains(team.getId()));
+    }
+
+    @Test
+    void findActiveTeamsByTournamentId_TournamentdeleteFlagtrueは除外する() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+
+        softDeleteTournament(tournament.getId());
+
+        List<Long> foundIds = teamRepository.findActiveTeamsByTournamentId(tournament.getId())
+                .stream().map(Team::getId).toList();
+
+        assertFalse(foundIds.contains(team.getId()));
+    }
+
+    @Test
+    void findActiveTeamsByTournamentId_ownerdeleteFlagtrueは除外する() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+
+        softDeleteUser(owner.getId());
+
+        List<Long> foundIds = teamRepository.findActiveTeamsByTournamentId(tournament.getId())
+                .stream().map(Team::getId).toList();
+
+        assertFalse(foundIds.contains(team.getId()));
+    }
+
+    @Test
+    void findActiveTeamsByTournamentId_該当Teamが0件の場合は空Listを返す() {
+        Tournament tournament = createTournament();
+
+        assertTrue(teamRepository.findActiveTeamsByTournamentId(tournament.getId()).isEmpty());
+    }
+
+    @Test
     void findActiveTeamById_有効なTeamはTournament名とowner名を含めて取得できる() {
         Long characterId = anyExistingCharacterId();
         User owner = createUser(characterId);

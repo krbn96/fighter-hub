@@ -39,6 +39,19 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
             """)
     Optional<Team> findActiveTeamById(@Param("id") Long id);
 
+    // findAllActiveTeamsと同じ有効性条件(Team/Tournament/ownerのdeleteFlag)に
+    // tournamentId絞り込みを加えたもの。大会ごとのチーム一覧取得APIで使用する。
+    @Query("""
+            SELECT t FROM Team t
+            JOIN FETCH t.tournament tour
+            JOIN FETCH t.owner o
+            WHERE tour.id = :tournamentId
+              AND t.deleteFlag = false
+              AND tour.deleteFlag = false
+              AND o.deleteFlag = false
+            """)
+    List<Team> findActiveTeamsByTournamentId(@Param("tournamentId") Long tournamentId);
+
     // 同じTeamに対して複数Applicationがほぼ同時にapproveされた場合に、両Transactionが
     // 同じmember countを見て定員を超過することを防止するための行ロック付き取得。
     // 有効Teamの判定条件はfindActiveTeamByIdと同じ。ロック対象をTeam行のみに限定するため、

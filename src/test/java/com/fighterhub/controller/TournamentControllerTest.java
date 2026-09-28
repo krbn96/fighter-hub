@@ -30,12 +30,14 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fighterhub.config.SecurityConfig;
+import com.fighterhub.dto.TeamResponse;
 import com.fighterhub.dto.TournamentCreateRequest;
 import com.fighterhub.dto.TournamentResponse;
 import com.fighterhub.dto.TournamentUpdateRequest;
 import com.fighterhub.exception.NotAdminException;
 import com.fighterhub.exception.TournamentNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
+import com.fighterhub.service.TeamService;
 import com.fighterhub.service.TournamentService;
 
 @WebMvcTest(TournamentController.class)
@@ -47,6 +49,9 @@ class TournamentControllerTest {
 
     @MockitoBean
     private TournamentService tournamentService;
+
+    @MockitoBean
+    private TeamService teamService;
 
     // SecurityFilterChainがJwtDecoderを要求するためコンテキスト起動に必要。
     // permitAllのため、このクラスのテストではdecodeは呼ばれない。
@@ -108,6 +113,53 @@ class TournamentControllerTest {
                 .andExpect(jsonPath("$.error").value("Not Found"))
                 .andExpect(jsonPath("$.message").value("Tournament not found. id=999"))
                 .andExpect(jsonPath("$.path").value("/api/tournaments/999"));
+    }
+
+    private static TeamResponse sampleTeamResponse(Long id, Long tournamentId) {
+        return new TeamResponse(
+                id,
+                tournamentId,
+                "STREET FIGHTER 6 CUP",
+                1L,
+                "Owner User",
+                "Team Ryu",
+                "MASTER",
+                List.of(1L, 2L),
+                "誰でも歓迎です",
+                LocalDateTime.of(2026, 1, 1, 0, 0),
+                LocalDateTime.of(2026, 1, 2, 0, 0)
+        );
+    }
+
+    @Test
+    void findTeamsByTournament_認証なしで200を返しTeam一覧を取得できる() throws Exception {
+        when(teamService.findTeamsByTournament(1L)).thenReturn(List.of(sampleTeamResponse(100L, 1L)));
+
+        mockMvc.perform(get("/api/tournaments/1/teams"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(100))
+                .andExpect(jsonPath("$[0].tournamentId").value(1))
+                .andExpect(jsonPath("$[0].name").value("Team Ryu"));
+    }
+
+    @Test
+    void findTeamsByTournament_Teamが0件の場合_200を返し空配列を返す() throws Exception {
+        when(teamService.findTeamsByTournament(1L)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/tournaments/1/teams"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void findTeamsByTournament_TeamServiceがTournamentNotFoundExceptionを投げた場合_404を返す() throws Exception {
+        when(teamService.findTeamsByTournament(999L)).thenThrow(new TournamentNotFoundException(999L));
+
+        mockMvc.perform(get("/api/tournaments/999/teams"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Tournament not found. id=999"));
     }
 
     @Test

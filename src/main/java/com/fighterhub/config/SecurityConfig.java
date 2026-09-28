@@ -43,6 +43,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/tournaments").permitAll()
                 // 数値IDのみに一致させ、将来のPOST/PATCH/DELETEはpermitAllにならないようにする
                 .requestMatchers(HttpMethod.GET, "/api/tournaments/{id:[0-9]+}").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/tournaments/{tournamentId:[0-9]+}/teams").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2
