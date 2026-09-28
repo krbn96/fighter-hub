@@ -32,6 +32,15 @@ FIGHTER HUBでは、大会ごとにチームを作成してメンバーを募集
 - チーム編集（ownerのみ実行可能）
 - チームメンバー一覧取得
 - チームメンバー削除（ownerのみ実行可能、owner自身は削除不可）
+- チームへの参加申請
+- Team ownerによる参加申請一覧取得（PENDING/APPROVED/REJECTEDすべて確認可能）
+- 自分が送った参加申請履歴の取得
+- Team ownerによる参加申請の承認・拒否
+- 参加申請承認時のチームメンバー自動追加（承認とメンバー追加は同一トランザクション）
+- 同一大会内で同時に保持できるPENDING申請は1ユーザーにつき1件まで
+- 同一大会内では1チームにのみ所属可能（重複所属防止）
+- チーム定員（Tournament.teamSize）を超える承認の防止
+- Pessimistic Lockによる同時申請・同時承認時の競合対策
 - Swagger UIによるAPI仕様の確認（Bearer認証対応）
 - 共通エラーハンドリング
 
@@ -39,10 +48,6 @@ FIGHTER HUBでは、大会ごとにチームを作成してメンバーを募集
 
 - 大会情報の閲覧
 - 大会ごとのチーム検索
-- 募集中チームへの参加申請
-- チームオーナーによる参加申請の承認・拒否
-- 参加申請承認時のチームメンバー追加
-- 大会のチーム定員（teamSize）チェック
 - 管理者による大会情報の管理
 
 ## Tech Stack
@@ -121,6 +126,11 @@ PostgreSQL
 | PATCH | /api/teams/{id} | JWT必須 |
 | GET | /api/teams/{id}/members | 不要 |
 | DELETE | /api/teams/{teamId}/members/{userId} | JWT必須 |
+| POST | /api/teams/{teamId}/applications | JWT必須 |
+| GET | /api/teams/{teamId}/applications | JWT必須 |
+| GET | /api/applications/me | JWT必須 |
+| PATCH | /api/teams/{teamId}/applications/{applicationId}/approve | JWT必須 |
+| PATCH | /api/teams/{teamId}/applications/{applicationId}/reject | JWT必須 |
 
 詳細な仕様は、アプリケーション起動後に以下から確認できます。
 
@@ -196,6 +206,7 @@ Windows:
 ## Testing
 
 JUnit 5、Mockito、MockMvcを使用して、Service層およびController層のテストを実装しています。
+参加申請の承認・定員チェックなど排他制御が関わる処理については、実PostgreSQLを使った並行実行のIntegration Testでも整合性を確認しています。
 
 ### Run tests
 
@@ -229,6 +240,6 @@ Windows:
 
 現在開発中です。
 
-Spring Bootを使用したバックエンドAPIの基盤を構築し、キャラクター情報取得API、ユーザー登録、JWT認証によるログイン、自分のプロフィール取得・更新、チーム作成・編集・メンバー一覧取得・メンバー削除、共通エラーハンドリング、APIドキュメント、テスト環境まで実装しています。
+Spring Bootを使用したバックエンドAPIの基盤を構築し、キャラクター情報取得API、ユーザー登録、JWT認証によるログイン、自分のプロフィール取得・更新、チーム作成・編集・メンバー一覧取得・メンバー削除、チームへの参加申請と承認・拒否（承認時のメンバー自動追加、定員チェック、Pessimistic Lockによる同時実行対策を含む）、共通エラーハンドリング、APIドキュメント、テスト環境まで実装しています。
 
-今後は、チームへの参加申請とその承認・拒否、大会情報の管理などの機能を順次実装する予定です。
+今後は、大会情報の閲覧・管理などの機能を順次実装する予定です。

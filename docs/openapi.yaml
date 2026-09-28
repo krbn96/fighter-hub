@@ -2054,602 +2054,319 @@ paths:
                     description: エラーメッセージ
                     example: Internal server error
 
-  /applications:
-    get:
-      summary: 加入申請一覧取得
-      description: 管理しているチームへの加入申請一覧を取得する
+  /teams/{teamId}/applications:
+    post:
+      summary: チーム参加申請
+      description: 認証済みユーザーが指定したチームへの参加を申請する
       security:
         - BearerAuth: []
       parameters:
-        - name: application_id
-          in: query
-          required: false
+        - name: teamId
+          in: path
+          required: true
           schema:
             type: integer
-          description: 加入申請ID
-          example: 1
-
-        - name: team_id
-          in: query
-          required: false
-          schema:
-            type: integer
+            format: int64
           description: チームID
           example: 1
 
-        - name: user_id
-          in: query
-          required: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                  nullable: true
+                  description: 申請メッセージ(任意、指定しない場合はnull)
+                  example: 一緒に大会に参加したいです！
+
+      responses:
+        '201':
+          description: 申請作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecruitmentApplicationResponse'
+
+        '400':
+          description: 自分がownerのチームへ申請した場合
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-28T12:00:00"
+                status: 400
+                error: Bad Request
+                message: "User cannot apply to their own team. userId=1, teamId=1"
+                path: /api/teams/1/applications
+
+        '401':
+          description: 認証されていない、または無効なJWT
+
+        '404':
+          description: 指定したチームが存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-28T12:00:00"
+                status: 404
+                error: Not Found
+                message: "Team not found. id=999"
+                path: /api/teams/999/applications
+
+        '409':
+          description: 同一大会内ですでにいずれかのチームへ所属している、または同一大会内にPENDING状態の申請がすでに存在する
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-28T12:00:00"
+                status: 409
+                error: Conflict
+                message: "User already belongs to a team in this tournament. userId=10, tournamentId=1"
+                path: /api/teams/1/applications
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: チーム参加申請一覧取得
+      description: Team ownerが、自身のチームに届いた参加申請一覧を取得する。PENDING/APPROVED/REJECTEDすべてを含み、createdAt降順で返す
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: teamId
+          in: path
+          required: true
           schema:
             type: integer
-          description: 申請ユーザーID
-          example: 10
-
-        - name: status
-          in: query
-          required: false
-          schema:
-            type: string
-          description: 申請ステータス
-          example: PENDING
+            format: int64
+          description: チームID
+          example: 1
 
       responses:
         '200':
-          description: 加入申請一覧取得成功
+          description: 申請一覧取得成功
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  type: object
-                  required:
-                    - id
-                    - team_id
-                    - user_id
-                    - message
-                    - status
-                    - created_at
-                    - updated_at
-                  properties:
-                    id:
-                      type: integer
-                      description: 加入申請ID
-                      example: 1
-                    team_id:
-                      type: integer
-                      description: チームID
-                      example: 1
-                    user_id:
-                      type: integer
-                      description: 申請ユーザーID
-                      example: 10
-                    message:
-                      type: string
-                      description: 申請メッセージ
-                      example: 一緒に大会に参加したいです！
-                    status:
-                      type: string
-                      description: 申請ステータス
-                      example: PENDING
-                    created_at:
-                      type: string
-                      format: date-time
-                      description: 申請日時
-                      example: 2026-09-01T12:00:00Z
-                    updated_at:
-                      type: string
-                      format: date-time
-                      description: 更新日時
-                      example: 2026-09-01T12:00:00Z
-
-        '400':
-          description: リクエストが不正
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                  $ref: '#/components/schemas/RecruitmentApplicationResponse'
 
         '401':
-          description: 認証エラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
+          description: 認証されていない、または無効なJWT
 
         '403':
-          description: 権限がない
+          description: Team ownerではないユーザーによる取得
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Forbidden
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-28T12:00:00"
+                status: 403
+                error: Forbidden
+                message: "User is not the owner of this team. userId=999, teamId=1"
+                path: /api/teams/1/applications
+
+        '404':
+          description: 指定したチームが存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
-  /applications/{id}:
-    get:
-      summary: 加入申請詳細取得
-      description: 指定されたIDの加入申請情報を取得する
+  /teams/{teamId}/applications/{applicationId}/approve:
+    patch:
+      summary: チーム参加申請承認
+      description: Team ownerが、自身のチームへの参加申請を承認しTeamMemberとして追加する。TeamMember追加とApplicationのAPPROVED変更は同一トランザクションで行われる
       security:
         - BearerAuth: []
       parameters:
-        - name: id
+        - name: teamId
           in: path
           required: true
           schema:
             type: integer
-          description: 加入申請ID
+            format: int64
+          description: チームID
+          example: 1
+
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: 参加申請ID
           example: 1
 
       responses:
         '200':
-          description: 加入申請情報取得成功
+          description: 承認成功
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - id
-                  - team_id
-                  - user_id
-                  - message
-                  - status
-                  - created_at
-                  - updated_at
-                properties:
-                  id:
-                    type: integer
-                    description: 加入申請ID
-                    example: 1
-                  team_id:
-                    type: integer
-                    description: チームID
-                    example: 1
-                  user_id:
-                    type: integer
-                    description: 申請ユーザーID
-                    example: 10
-                  message:
-                    type: string
-                    description: 申請メッセージ
-                    example: 一緒に大会に参加したいです！
-                  status:
-                    type: string
-                    description: 申請ステータス
-                    example: PENDING
-                  created_at:
-                    type: string
-                    format: date-time
-                    description: 申請日時
-                    example: 2026-09-01T12:00:00Z
-                  updated_at:
-                    type: string
-                    format: date-time
-                    description: 更新日時
-                    example: 2026-09-01T12:00:00Z
-
-        '400':
-          description: リクエストが不正
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                $ref: '#/components/schemas/RecruitmentApplicationResponse'
 
         '401':
-          description: 認証エラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
+          description: 認証されていない、または無効なJWT
 
         '403':
-          description: 権限がない
+          description: Team ownerではないユーザーによる承認
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Forbidden
+                $ref: '#/components/schemas/ErrorResponse'
 
         '404':
-          description: 対象IDの加入申請データなし
+          description: 指定したチームまたは参加申請が存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Application not found
-
-        '500':
-          description: サーバーエラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
-
-    patch:
-      summary: 加入申請更新
-      description: 指定されたIDの加入申請を更新する
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-          description: 加入申請ID
-          example: 1
-
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - status
-              properties:
-                status:
-                  type: string
-                  description: 申請ステータス
-                  enum:
-                    - APPROVED
-                    - REJECTED
-                  example: APPROVED
-
-      responses:
-        '204':
-          description: 加入申請更新成功
-
-        '400':
-          description: リクエストが不正
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
-
-        '401':
-          description: 認証エラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
-
-        '403':
-          description: 権限がない
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Forbidden
-
-        '404':
-          description: 対象IDの加入申請データなし
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Application not found
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-28T12:00:00"
+                status: 404
+                error: Not Found
+                message: "RecruitmentApplication not found. teamId=1, applicationId=999"
+                path: /api/teams/1/applications/999/approve
 
         '409':
-          description: データが競合
+          description: 参加申請が処理済み、同一大会内ですでにいずれかのチームへ所属している、またはチームが定員に達している
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Conflict
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-28T12:00:00"
+                status: 409
+                error: Conflict
+                message: "Team is full. teamId=1"
+                path: /api/teams/1/applications/1/approve
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
-    delete:
-      summary: 加入申請削除
-      description: 指定されたIDの加入申請を削除する
+  /teams/{teamId}/applications/{applicationId}/reject:
+    patch:
+      summary: チーム参加申請拒否
+      description: Team ownerが、自身のチームへの参加申請を拒否する。TeamMemberは追加されない
       security:
         - BearerAuth: []
       parameters:
-        - name: id
+        - name: teamId
           in: path
           required: true
           schema:
             type: integer
-          description: 加入申請ID
-          example: 1
-
-      responses:
-        '204':
-          description: 加入申請削除成功
-
-        '400':
-          description: リクエストが不正
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
-
-        '401':
-          description: 認証エラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
-
-        '403':
-          description: 権限がない
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Forbidden
-
-        '404':
-          description: 対象IDの加入申請データなし
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Application not found
-
-        '500':
-          description: サーバーエラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
-
-  /teams/{id}/applications:
-    post:
-      summary: 加入申請作成
-      description: 指定されたチームへの加入申請を作成する
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
+            format: int64
           description: チームID
           example: 1
 
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - message
-              properties:
-                message:
-                  type: string
-                  description: 申請メッセージ
-                  example: 一緒に大会に参加したいです！
+        - name: applicationId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: 参加申請ID
+          example: 1
 
       responses:
-        '201':
-          description: 加入申請作成成功
+        '200':
+          description: 拒否成功
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - id
-                properties:
-                  id:
-                    type: integer
-                    description: 作成された加入申請ID
-                    example: 1
-
-        '400':
-          description: リクエストが不正
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                $ref: '#/components/schemas/RecruitmentApplicationResponse'
 
         '401':
-          description: 認証エラー
+          description: 認証されていない、または無効なJWT
+
+        '403':
+          description: Team ownerではないユーザーによる拒否
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
+                $ref: '#/components/schemas/ErrorResponse'
 
         '404':
-          description: 対象IDのチームデータなし
+          description: 指定したチームまたは参加申請が存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Team not found
+                $ref: '#/components/schemas/ErrorResponse'
 
         '409':
-          description: データが競合
+          description: 参加申請が処理済み
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Conflict
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-28T12:00:00"
+                status: 409
+                error: Conflict
+                message: "RecruitmentApplication is already processed. applicationId=1"
+                path: /api/teams/1/applications/1/reject
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /applications/me:
+    get:
+      summary: 自分の参加申請一覧取得
+      description: 認証済みユーザー本人が送った参加申請の一覧を取得する。PENDING/APPROVED/REJECTEDすべてを含み、createdAt降順で返す
+      security:
+        - BearerAuth: []
+
+      responses:
+        '200':
+          description: 自分の申請一覧取得成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecruitmentApplicationResponse'
+
+        '401':
+          description: 認証されていない、または無効なJWT
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /characters:
     get:
@@ -2754,6 +2471,60 @@ components:
           type: string
           description: リクエストパス
           example: /api/users
+    RecruitmentApplicationResponse:
+      type: object
+      required:
+        - id
+        - teamId
+        - userId
+        - userName
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 参加申請ID
+          example: 1
+        teamId:
+          type: integer
+          format: int64
+          description: チームID
+          example: 1
+        userId:
+          type: integer
+          format: int64
+          description: 申請ユーザーID
+          example: 10
+        userName:
+          type: string
+          description: 申請ユーザー名
+          example: John Doe
+        message:
+          type: string
+          nullable: true
+          description: 申請メッセージ
+          example: 一緒に大会に参加したいです！
+        status:
+          $ref: '#/components/schemas/RecruitmentApplicationStatus'
+        createdAt:
+          type: string
+          format: date-time
+          description: 申請日時
+          example: "2026-09-28T12:00:00"
+        updatedAt:
+          type: string
+          format: date-time
+          description: 更新日時
+          example: "2026-09-28T12:00:00"
+    RecruitmentApplicationStatus:
+      type: string
+      description: 参加申請の状態
+      enum:
+        - PENDING
+        - APPROVED
+        - REJECTED
   securitySchemes:
     BearerAuth:
       type: http
