@@ -40,24 +40,27 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.fighterhub.controller.RecruitmentApplicationController;
 import com.fighterhub.controller.RecruitmentApplicationMeController;
 import com.fighterhub.controller.TeamController;
+import com.fighterhub.controller.TournamentController;
 import com.fighterhub.controller.UserController;
 import com.fighterhub.dto.UserMeResponse;
 import com.fighterhub.service.RecruitmentApplicationService;
 import com.fighterhub.service.TeamService;
+import com.fighterhub.service.TournamentService;
 import com.fighterhub.service.UserService;
 
 // SecurityConfigのOAuth2 Resource Server(JWT Bearer)統合を、実際のFilter Chainを通して検証する。
 // GET /api/users/{id:[0-9]+}のみpermitAllのため、GET /api/users/meはanyRequest().authenticated()
 // の対象になる。UserController#findMe(@AuthenticationPrincipal Jwt)へ接続される実在のパスである。
-// TeamController/RecruitmentApplicationController/RecruitmentApplicationMeControllerもスライスに含め、
-// /api/teams・/api/applications系のmatcher確認を実在のハンドラー経由(200)で行えるようにする
-// (未マッピングパスだとNoHandlerFoundExceptionがGlobalExceptionHandlerの汎用ハンドラーに
+// TeamController/RecruitmentApplicationController/RecruitmentApplicationMeController/TournamentControllerも
+// スライスに含め、/api/teams・/api/applications・/api/tournaments系のmatcher確認を実在のハンドラー経由(200)で
+// 行えるようにする(未マッピングパスだとNoHandlerFoundExceptionがGlobalExceptionHandlerの汎用ハンドラーに
 // 捕捉され500になり、permitAllの確認として不適切なため)。
 @WebMvcTest({
     UserController.class,
     TeamController.class,
     RecruitmentApplicationController.class,
-    RecruitmentApplicationMeController.class
+    RecruitmentApplicationMeController.class,
+    TournamentController.class
 })
 @Import({SecurityConfig.class, JwtConfig.class})
 @TestPropertySource(properties = {
@@ -88,6 +91,9 @@ class SecurityConfigTest {
 
     @MockitoBean
     private RecruitmentApplicationService recruitmentApplicationService;
+
+    @MockitoBean
+    private TournamentService tournamentService;
 
     @Test
     void authenticated対象パスへAuthorizationヘッダーなしでアクセスした場合_401を返す() throws Exception {
@@ -282,6 +288,33 @@ class SecurityConfigTest {
     @Test
     void GET_apiApplicationsMeは認証なしでは401を返しpermitAllにならない() throws Exception {
         mockMvc.perform(get("/api/applications/me"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void GET_apiTournamentsは認証なしでpermitAllとなる() throws Exception {
+        when(tournamentService.findAllTournaments()).thenReturn(java.util.List.of());
+
+        mockMvc.perform(get("/api/tournaments"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void GET_apiTournaments数値idは認証なしでpermitAllとなる() throws Exception {
+        when(tournamentService.findTournamentById(1L)).thenReturn(null);
+
+        mockMvc.perform(get("/api/tournaments/1"))
+                .andExpect(status().isOk());
+    }
+
+    // POST /api/tournamentsはmatcherが存在しないパスのため、anyRequest().authenticated()の
+    // 対象になることを確認する(Controllerに実際のPOSTハンドラーは無いが、認証フィルターは
+    // ハンドラー到達前に動作するため、この確認にController側の実装有無は影響しない)。
+    @Test
+    void POST_apiTournamentsは認証なしでは401を返しpermitAllにならない() throws Exception {
+        mockMvc.perform(post("/api/tournaments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
                 .andExpect(status().isUnauthorized());
     }
 
