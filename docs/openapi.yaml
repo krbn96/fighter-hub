@@ -1470,132 +1470,27 @@ paths:
   /tournaments:
     get:
       summary: 大会一覧取得
-      description: 大会一覧を取得する
-      parameters:
-        - name: tournament_id
-          in: query
-          required: false
-          schema:
-            type: integer
-          description: 大会ID
-          example: 1
-
-        - name: name
-          in: query
-          required: false
-          schema:
-            type: string
-          description: 大会名
-          example: STREET FIGHTER 6 CUP
-
-        - name: start_at
-          in: query
-          required: false
-          schema:
-            type: string
-            format: date-time
-          description: 大会開始日時
-          example: 2026-10-01T19:00:00Z
-
-        - name: status
-          in: query
-          required: false
-          schema:
-            type: string
-          description: 大会ステータス
-          example: OPEN
-
+      description: 有効な大会の一覧を取得する(delete_flag=falseの大会のみ)
       responses:
         '200':
-          description: 大会一覧取得成功
+          description: 取得成功
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  type: object
-                  required:
-                    - id
-                    - name
-                    - description
-                    - start_at
-                    - team_size
-                    - max_players
-                    - status
-                    - created_at
-                    - updated_at
-                  properties:
-                    id:
-                      type: integer
-                      description: 大会ID
-                      example: 1
-                    name:
-                      type: string
-                      description: 大会名
-                      example: STREET FIGHTER 6 CUP
-                    description:
-                      type: string
-                      description: 大会の説明
-                      example: Street Fighter 6の3on3大会です
-                    start_at:
-                      type: string
-                      format: date-time
-                      description: 大会開始日時
-                      example: 2026-10-01T19:00:00Z
-                    team_size:
-                      type: integer
-                      description: 1チームあたりの人数
-                      example: 3
-                    max_players:
-                      type: integer
-                      description: 大会の最大参加人数
-                      example: 64
-                    status:
-                      type: string
-                      description: 大会ステータス
-                      example: OPEN
-                    created_at:
-                      type: string
-                      format: date-time
-                      description: 作成日時
-                      example: 2026-09-01T00:00:00Z
-                    updated_at:
-                      type: string
-                      format: date-time
-                      description: 更新日時
-                      example: 2026-09-02T00:00:00Z
-
-        '400':
-          description: リクエストが不正
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                  $ref: '#/components/schemas/TournamentResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
     post:
       summary: 大会作成
-      description: 新しい大会を作成する
+      description: ADMINユーザーが新しい大会を作成する
       security:
         - BearerAuth: []
       requestBody:
@@ -1603,237 +1498,98 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - name
-                - description
-                - start_at
-                - team_size
-                - max_players
-              properties:
-                name:
-                  type: string
-                  description: 大会名
-                  example: STREET FIGHTER 6 CUP
-                description:
-                  type: string
-                  description: 大会の説明
-                  example: Street Fighter 6の3on3大会です
-                start_at:
-                  type: string
-                  format: date-time
-                  description: 大会開始日時
-                  example: 2026-10-01T19:00:00Z
-                team_size:
-                  type: integer
-                  description: 1チームあたりの人数
-                  example: 3
-                max_players:
-                  type: integer
-                  description: 大会の最大参加人数
-                  example: 64
+              $ref: '#/components/schemas/TournamentCreateRequest'
 
       responses:
         '201':
-          description: 大会作成成功
+          description: 作成成功
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - id
-                properties:
-                  id:
-                    type: integer
-                    description: 作成された大会のID
-                    example: 1
+                $ref: '#/components/schemas/TournamentResponse'
 
         '400':
-          description: リクエストが不正
+          description: リクエストが不正、またはBean Validationエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                $ref: '#/components/schemas/ErrorResponse'
 
         '401':
-          description: 認証エラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
+          description: 認証されていない、または無効なJWT
 
         '403':
-          description: 権限がない
+          description: ADMINではないユーザーによる作成
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Forbidden
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-28T12:00:00"
+                status: 403
+                error: Forbidden
+                message: "User is not an admin. userId=2"
+                path: /api/tournaments
 
-        '409':
-          description: データが競合
+        '404':
+          description: JWTのsubに対応するユーザーが存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Conflict
+                $ref: '#/components/schemas/ErrorResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
- 
+                $ref: '#/components/schemas/ErrorResponse'
+
   /tournaments/{id}:
     get:
       summary: 大会詳細取得
-      description: 指定されたIDの大会情報を取得する
+      description: 指定したIDの大会を取得する(delete_flag=falseの大会のみ)
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
+            format: int64
           description: 大会ID
           example: 1
 
       responses:
         '200':
-          description: 大会情報取得成功
+          description: 取得成功
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - id
-                  - name
-                  - description
-                  - start_at
-                  - team_size
-                  - max_players
-                  - status
-                  - created_at
-                  - updated_at
-                properties:
-                  id:
-                    type: integer
-                    description: 大会ID
-                    example: 1
-                  name:
-                    type: string
-                    description: 大会名
-                    example: STREET FIGHTER 6 CUP
-                  description:
-                    type: string
-                    description: 大会の説明
-                    example: Street Fighter 6の3on3大会です
-                  start_at:
-                    type: string
-                    format: date-time
-                    description: 大会開始日時
-                    example: 2026-10-01T19:00:00Z
-                  team_size:
-                    type: integer
-                    description: 1チームあたりの人数
-                    example: 3
-                  max_players:
-                    type: integer
-                    description: 大会の最大参加人数
-                    example: 64
-                  status:
-                    type: string
-                    description: 大会ステータス
-                    example: OPEN
-                  created_at:
-                    type: string
-                    format: date-time
-                    description: 作成日時
-                    example: 2026-09-01T00:00:00Z
-                  updated_at:
-                    type: string
-                    format: date-time
-                    description: 更新日時
-                    example: 2026-09-02T00:00:00Z
-
-        '400':
-          description: リクエストが不正
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                $ref: '#/components/schemas/TournamentResponse'
 
         '404':
-          description: 対象IDの大会データなし
+          description: 指定した大会が存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Tournament not found
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                timestamp: "2026-09-28T12:00:00"
+                status: 404
+                error: Not Found
+                message: "Tournament not found. id=999"
+                path: /api/tournaments/999
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
     patch:
-      summary: 大会情報更新
-      description: 指定された大会の情報を更新する
+      summary: 大会更新
+      description: ADMINユーザーが大会情報を部分更新する
       security:
         - BearerAuth: []
       parameters:
@@ -1842,6 +1598,7 @@ paths:
           required: true
           schema:
             type: integer
+            format: int64
           description: 大会ID
           example: 1
 
@@ -1850,125 +1607,50 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                  description: 大会名
-                  example: STREET FIGHTER 6 CUP
-                description:
-                  type: string
-                  description: 大会の説明
-                  example: Street Fighter 6の3on3大会です
-                start_at:
-                  type: string
-                  format: date-time
-                  description: 大会開始日時
-                  example: 2026-10-01T19:00:00Z
-                team_size:
-                  type: integer
-                  description: 1チームあたりの人数
-                  example: 3
-                max_players:
-                  type: integer
-                  description: 大会の最大参加人数
-                  example: 64
-                status:
-                  type: string
-                  description: 大会ステータス
-                  example: OPEN
+              $ref: '#/components/schemas/TournamentUpdateRequest'
 
       responses:
-        '204':
-          description: 大会情報更新成功
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TournamentResponse'
 
         '400':
-          description: リクエストが不正
+          description: リクエストが不正、またはBean Validationエラー(NOT NULL項目への明示的nullを含む)
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                $ref: '#/components/schemas/ErrorResponse'
 
         '401':
-          description: 認証エラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
+          description: 認証されていない、または無効なJWT
 
         '403':
-          description: 権限がない
+          description: ADMINではないユーザーによる更新
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Forbidden
+                $ref: '#/components/schemas/ErrorResponse'
 
         '404':
-          description: 対象IDの大会データなし
+          description: JWTのsubに対応するユーザー、または指定した大会が存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Tournament not found
-
-        '409':
-          description: データが競合
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Conflict
+                $ref: '#/components/schemas/ErrorResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
     delete:
       summary: 大会削除
-      description: 指定されたIDの大会を削除する
+      description: ADMINユーザーが大会を論理削除する(delete_flag=trueへ更新するのみで物理削除は行わない)
       security:
         - BearerAuth: []
       parameters:
@@ -1977,82 +1659,37 @@ paths:
           required: true
           schema:
             type: integer
+            format: int64
           description: 大会ID
           example: 1
 
       responses:
         '204':
-          description: 大会削除成功
-
-        '400':
-          description: リクエストが不正
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+          description: 削除成功
 
         '401':
-          description: 認証エラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
+          description: 認証されていない、または無効なJWT
 
         '403':
-          description: 権限がない
+          description: ADMINではないユーザーによる削除
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Forbidden
+                $ref: '#/components/schemas/ErrorResponse'
 
         '404':
-          description: 対象IDの大会データなし
+          description: JWTのsubに対応するユーザー、または指定した大会が存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Tournament not found
+                $ref: '#/components/schemas/ErrorResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
   /teams/{teamId}/applications:
     post:
@@ -2525,6 +2162,113 @@ components:
         - PENDING
         - APPROVED
         - REJECTED
+    TournamentResponse:
+      type: object
+      required:
+        - id
+        - name
+        - teamSize
+        - startAt
+        - maxPlayers
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 大会ID
+          example: 1
+        name:
+          type: string
+          description: 大会名
+          example: STREET FIGHTER 6 CUP
+        teamSize:
+          type: integer
+          description: 1チームあたりの人数
+          example: 3
+        startAt:
+          type: string
+          format: date-time
+          description: 大会開始日時
+          example: "2026-10-01T19:00:00"
+        maxPlayers:
+          type: integer
+          description: 大会の最大参加人数
+          example: 64
+        status:
+          type: string
+          description: 大会ステータス
+          example: OPEN
+        createdAt:
+          type: string
+          format: date-time
+          description: 作成日時
+          example: "2026-09-01T00:00:00"
+        updatedAt:
+          type: string
+          format: date-time
+          description: 更新日時
+          example: "2026-09-02T00:00:00"
+    TournamentCreateRequest:
+      type: object
+      required:
+        - name
+        - teamSize
+        - startAt
+        - maxPlayers
+        - status
+      properties:
+        name:
+          type: string
+          description: 大会名
+          example: STREET FIGHTER 6 CUP
+        teamSize:
+          type: integer
+          minimum: 1
+          description: 1チームあたりの人数
+          example: 3
+        startAt:
+          type: string
+          format: date-time
+          description: 大会開始日時
+          example: "2026-10-01T19:00:00"
+        maxPlayers:
+          type: integer
+          minimum: 1
+          description: 大会の最大参加人数
+          example: 64
+        status:
+          type: string
+          description: 大会ステータス
+          example: OPEN
+    TournamentUpdateRequest:
+      type: object
+      description: 部分更新用リクエスト。指定したフィールドのみ更新され、省略したフィールドは変更されない。すべてNOT NULL項目のため、明示的にnullを指定した場合は400になる。
+      properties:
+        name:
+          type: string
+          description: 大会名（指定する場合は空文字不可）
+          example: STREET FIGHTER 6 CUP
+        teamSize:
+          type: integer
+          minimum: 1
+          description: 1チームあたりの人数（指定する場合は1以上）
+          example: 3
+        startAt:
+          type: string
+          format: date-time
+          description: 大会開始日時
+          example: "2026-10-01T19:00:00"
+        maxPlayers:
+          type: integer
+          minimum: 1
+          description: 大会の最大参加人数（指定する場合は1以上）
+          example: 64
+        status:
+          type: string
+          description: 大会ステータス（指定する場合は空文字不可）
+          example: OPEN
   securitySchemes:
     BearerAuth:
       type: http

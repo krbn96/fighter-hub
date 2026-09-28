@@ -41,14 +41,14 @@ FIGHTER HUBでは、大会ごとにチームを作成してメンバーを募集
 - 同一大会内では1チームにのみ所属可能（重複所属防止）
 - チーム定員（Tournament.teamSize）を超える承認の防止
 - Pessimistic Lockによる同時申請・同時承認時の競合対策
+- 大会一覧取得・大会詳細取得
+- ADMINユーザーによる大会作成・更新・論理削除（ADMIN判定はDB上のUser.roleを基準とする認可）
 - Swagger UIによるAPI仕様の確認（Bearer認証対応）
 - 共通エラーハンドリング
 
 ### Planned
 
-- 大会情報の閲覧
 - 大会ごとのチーム検索
-- 管理者による大会情報の管理
 
 ## Tech Stack
 
@@ -131,6 +131,11 @@ PostgreSQL
 | GET | /api/applications/me | JWT必須 |
 | PATCH | /api/teams/{teamId}/applications/{applicationId}/approve | JWT必須 |
 | PATCH | /api/teams/{teamId}/applications/{applicationId}/reject | JWT必須 |
+| GET | /api/tournaments | 不要 |
+| GET | /api/tournaments/{id} | 不要 |
+| POST | /api/tournaments | JWT必須 |
+| PATCH | /api/tournaments/{id} | JWT必須 |
+| DELETE | /api/tournaments/{id} | JWT必須 |
 
 詳細な仕様は、アプリケーション起動後に以下から確認できます。
 
@@ -240,6 +245,6 @@ Windows:
 
 現在開発中です。
 
-Spring Bootを使用したバックエンドAPIの基盤を構築し、キャラクター情報取得API、ユーザー登録、JWT認証によるログイン、自分のプロフィール取得・更新、チーム作成・編集・メンバー一覧取得・メンバー削除、チームへの参加申請と承認・拒否（承認時のメンバー自動追加、定員チェック、Pessimistic Lockによる同時実行対策を含む）、共通エラーハンドリング、APIドキュメント、テスト環境まで実装しています。
+Spring Bootを使用したバックエンドAPIの基盤を構築し、キャラクター情報取得API、ユーザー登録、JWT認証によるログイン、自分のプロフィール取得・更新、チーム作成・編集・メンバー一覧取得・メンバー削除、チームへの参加申請と承認・拒否（承認時のメンバー自動追加、定員チェック、Pessimistic Lockによる同時実行対策を含む）、大会の一覧・詳細取得およびADMINユーザーによる大会作成・更新・論理削除、共通エラーハンドリング、APIドキュメント、テスト環境まで実装しています。
 
-今後は、大会情報の閲覧・管理などの機能を順次実装する予定です。
+今後は、大会ごとのチーム検索などの機能を順次実装する予定です。
