@@ -38,6 +38,13 @@ class UserTest {
     }
 
     @Test
+    void create_roleの初期値はUSERである() {
+        User user = newUserWithFourCharacters();
+
+        assertEquals(UserRole.USER, user.getRole());
+    }
+
+    @Test
     void updateName_nameを更新できる() {
         User user = newUserWithFourCharacters();
 

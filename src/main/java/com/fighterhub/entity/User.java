@@ -2,6 +2,8 @@ package com.fighterhub.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -10,6 +12,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -88,6 +91,16 @@ public class User {
 
     @Column(name = "password_hash", length = 255)
     private String passwordHash;
+
+    // クライアントからroleを指定できるAPIは提供しない。新規登録は常にUSERとして作成され、
+    // ADMINへの昇格はAPI経由では行わない(DBを直接更新する運用を想定)。
+    // 新規行の値はJava側のフィールド初期値が常に決定する(下記@ColumnDefaultには依存しない)。
+    // @ColumnDefaultは、ddl-auto=updateで既存行にroleカラムを追加する際、
+    // NOT NULL制約を満たすために既存行をバックフィルする目的だけで付与している。
+    @ColumnDefault("'USER'")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role", nullable = false, length = 20)
+    private UserRole role = UserRole.USER;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -263,6 +276,10 @@ public class User {
 
     public String getPasswordHash() {
         return passwordHash;
+    }
+
+    public UserRole getRole() {
+        return role;
     }
 
     public LocalDateTime getCreatedAt() {
