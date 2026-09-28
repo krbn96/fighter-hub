@@ -1,13 +1,22 @@
 package com.fighterhub.controller;
 
+import jakarta.validation.Valid;
+
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.fighterhub.dto.ErrorResponse;
+import com.fighterhub.dto.TournamentCreateRequest;
 import com.fighterhub.dto.TournamentResponse;
 import com.fighterhub.service.TournamentService;
 
@@ -16,6 +25,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
 @RestController
 @RequestMapping("/api/tournaments")
@@ -79,5 +89,60 @@ public class TournamentController {
     @GetMapping("/{id}")
     public TournamentResponse findTournamentById(@PathVariable Long id) {
         return tournamentService.findTournamentById(id);
+    }
+
+    @Operation(
+        summary = "大会作成",
+        description = "ADMINユーザーが新しい大会を作成します。"
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "201",
+            description = "作成成功",
+            content = @Content(
+                schema = @Schema(implementation = TournamentResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "リクエストが不正、またはBean Validationエラー",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "認証されていない、または無効なJWT"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "ADMINではないユーザーによる作成",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "JWTのsubに対応するユーザーが存在しない",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "サーバーエラー",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    @ResponseStatus(HttpStatus.CREATED)
+    @PostMapping
+    public TournamentResponse createTournament(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody TournamentCreateRequest request) {
+        Long userId = Long.valueOf(jwt.getSubject());
+        return tournamentService.createTournament(userId, request);
     }
 }
