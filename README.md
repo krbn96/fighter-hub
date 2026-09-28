@@ -103,7 +103,7 @@ PostgreSQL
 
 ## API Documentation
 
-実装済みAPIの仕様は、Springdoc OpenAPIによってControllerやDTOの定義から生成しています。
+API仕様はJava実装（Controller / DTO / Validation等）をSource of Truthとします。実装済みAPIの仕様は、Springdoc OpenAPIによってControllerやDTOの定義から生成しています。
 
 ### 実装済みAPI
 
@@ -140,8 +140,9 @@ PostgreSQL
 - Swagger UI: `http://localhost:8080/swagger-ui/index.html`
 - OpenAPI JSON: `http://localhost:8080/v3/api-docs`
 
-`docs/openapi.yaml` は、今後実装予定のAPIを含む設計資料として管理しています。
-実装済みAPIについては、Springdocによって生成されるOpenAPI仕様を基準とします。
+これらはJava実装から自動生成されるAPI仕様・確認手段です。
+
+`docs/openapi.yaml` は、現在実装済みのAPIを記録するリポジトリ内のAPI仕様書として管理しています。未実装・将来予定のAPIは記載せず、API実装・変更が完了するたびにJava実装へ同期します。
 
 ## Development Environment
 

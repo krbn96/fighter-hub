@@ -11,7 +11,7 @@ paths:
   /auth/login:
     post:
       summary: ログイン
-      description: ユーザーのメールアドレスとパスワードでログインする
+      description: メールアドレスとパスワードで認証し、JWT Access Tokenを発行する
       requestBody:
         required: true
         content:
@@ -30,197 +30,62 @@ paths:
                 password:
                   type: string
                   format: password
-                  minLength: 8
-                  maxLength: 100
                   description: ユーザーのパスワード
                   example: password
+
       responses:
         '200':
-          description: ログイン成功
+          description: 認証成功
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - access_token
-                  - token_type
+                  - accessToken
                 properties:
-                  access_token:
+                  accessToken:
                     type: string
                     description: JWTアクセストークン
                     example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-                  token_type:
-                    type: string
-                    description: トークンの種類
-                    example: Bearer
 
         '400':
           description: リクエストが不正
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                $ref: '#/components/schemas/ErrorResponse'
 
         '401':
-          description: 認証エラー
+          description: メールアドレスまたはパスワードが正しくない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
-
-        '500':
-          description: サーバーエラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
-
-  /auth/logout:
-    post:
-      summary: ログアウト
-      description: ユーザーをログアウトさせる
-      security:
-        - BearerAuth: []
-      responses:
-        '204':
-          description: ログアウト成功
-
-        '401':
-          description: 認証エラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
-
-        '500':
-          description: サーバーエラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
   /users/{id}:
     get:
-      summary: ユーザー情報取得
-      description: 指定されたIDのユーザー情報を取得する
+      summary: ユーザー公開プロフィール取得
+      description: 指定したIDのユーザーの公開プロフィールを取得する
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
-          description: ユーザーのID
+            format: int64
+          description: ユーザーID
+          example: 1
+
       responses:
         '200':
-          description: ユーザー情報取得成功
+          description: 取得成功
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - id
-                  - name
-                  - characters
-                  - play_time_start
-                  - play_time_end
-                  - message
-                  - created_at
-                  - updated_at
-                properties:
-                  id:
-                    type: integer
-                    format: int64
-                    description: ユーザーID
-                    example: 1
-                  name:
-                    type: string
-                    description: ユーザーの名前
-                    example: John Doe
-                  characters:
-                    type: array
-                    description: 使用キャラクター情報
-                    items:
-                      type: object
-                      required:
-                        - character_id
-                        - rank
-                      properties:
-                        character_id:
-                          type: integer
-                          format: int64
-                        rank:
-                          type: string
-                        mr:
-                          type: integer
-                          nullable: true
-                  play_time_start:
-                    type: string
-                    description: プレイ開始時間
-                    example: "18:00"
-                  play_time_end:
-                    type: string
-                    description: プレイ終了時間
-                    example: "23:30"
-                  message:
-                    type: string
-                    description: ユーザーのメッセージ
-                    example: Hello, world!
-                  x_id:
-                    type: string
-                    description: X（旧Twitter）のID
-                    example: johndoe123
-                  discord_id:
-                    type: string
-                    description: DiscordのID
-                    example: johndoe#1234
-                  created_at:
-                    type: string
-                    format: date-time
-                    description: 作成日時
-                    example: 2023-01-01T00:00:00Z
-                  updated_at:
-                    type: string
-                    format: date-time
-                    description: 更新日時
-                    example: 2023-01-02T00:00:00Z
+                $ref: '#/components/schemas/UserPublicResponse'
 
         '400':
-          description: 不正なリクエスト
+          description: IDの形式が不正
           content:
             application/json:
               schema:
@@ -233,7 +98,7 @@ paths:
                 path: /api/users/abc
 
         '404':
-          description: 対象IDのユーザーデータなし
+          description: 指定したユーザーが存在しない
           content:
             application/json:
               schema:
@@ -251,128 +116,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                timestamp: "2026-09-18T12:00:00"
-                status: 500
-                error: Internal Server Error
-                message: "An unexpected error occurred."
-                path: /api/users/1
 
-  /users/me: 
+  /users/me:
     get:
-      summary: 自分のユーザー情報取得
-      description: ログイン中のユーザー情報を取得する
+      summary: 自分のプロフィール取得
+      description: 認証済みユーザー自身のプロフィールを取得する
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: ユーザー情報取得成功
+          description: 取得成功
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - id
-                  - name
-                  - characters
-                  - play_time_start
-                  - play_time_end
-                  - message
-                  - email
-                  - created_at
-                  - updated_at
-                properties:
-                  id:
-                    type: integer
-                    format: int64
-                    description: ユーザーID
-                    example: 1
-                  name:
-                    type: string
-                    description: ユーザーの名前
-                    example: John Doe
-                  characters:
-                    type: array
-                    description: 使用キャラクター情報
-                    items:
-                      type: object
-                      required:
-                        - character_id
-                        - rank
-                      properties:
-                        character_id:
-                          type: integer
-                        rank:
-                          type: string
-                        mr:
-                          type: integer
-                  play_time_start:
-                    type: string
-                    description: プレイ開始時間
-                    example: "18:00"
-                  play_time_end:
-                    type: string
-                    description: プレイ終了時間
-                    example: "23:30"
-                  message:
-                    type: string
-                    description: ユーザーのメッセージ
-                    example: Hello, world!
-                  email:
-                    type: string 
-                    format: email
-                    description: ユーザーのメールアドレス
-                    example: "user@example.com" 
-                  x_id:
-                    type: string
-                    description: X（旧Twitter）のID
-                    example: johndoe123
-                  discord_id:
-                    type: string
-                    description: DiscordのID
-                    example: johndoe#1234
-                  created_at:
-                    type: string
-                    format: date-time
-                    description: 作成日時
-                    example: 2023-01-01T00:00:00Z
-                  updated_at:
-                    type: string
-                    format: date-time
-                    description: 更新日時
-                    example: 2023-01-02T00:00:00Z
+                $ref: '#/components/schemas/UserMeResponse'
 
         '401':
-          description: 認証エラー（ログインしていない）
+          description: 認証されていない、または無効なJWT
+
+        '404':
+          description: JWTのsubに対応するユーザーが存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
+                $ref: '#/components/schemas/ErrorResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
     patch:
-      summary: 自分のユーザー情報更新
-      description: ログイン中のユーザー情報を更新する
+      summary: 自分のプロフィール更新
+      description: 認証済みユーザー自身のプロフィールを部分更新する
       security:
         - BearerAuth: []
       requestBody:
@@ -380,125 +158,38 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                email:
-                  type: string
-                  format: email
-                  description: ユーザーのメールアドレス
-                  example: user@example.com
-                password:
-                  type: string
-                  format: password
-                  minLength: 8
-                  maxLength: 100
-                  description: ユーザーのパスワード
-                  example: password
-                name:
-                  type: string
-                  maxLength: 50
-                  description: ユーザーの名前
-                  example: John Doe
-                characters:
-                  type: array
-                  description: 使用キャラクター情報
-                  items:
-                    type: object
-                    required:
-                      - character_id
-                      - rank
-                    properties:
-                      character_id:
-                        type: integer
-                        description: キャラクターID
-                        example: 1
-                      rank:
-                        type: string
-                        description: キャラクターのランク
-                        example: Master
-                      mr:
-                        type: integer
-                        description: Master以上の場合のMR
-                        example: 1800
-                play_time_start:
-                  type: string
-                  description: プレイ開始時間
-                  example: "18:00"
-                play_time_end:
-                  type: string
-                  description: プレイ終了時間
-                  example: "23:30"
-                message:
-                  type: string
-                  description: ユーザーのメッセージ
-                  example: Hello, world!
-                x_id:
-                  type: string
-                  description: X（旧Twitter）のID
-                  example: johndoe123
-                discord_id:
-                  type: string
-                  description: DiscordのID
-                  example: johndoe#1234
+              $ref: '#/components/schemas/UserUpdateRequest'
       responses:
-        '204':
-          description: ユーザー情報更新成功
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserMeResponse'
 
         '400':
-          description: リクエストが不正
+          description: リクエストが不正、またはBean Validationエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                $ref: '#/components/schemas/ErrorResponse'
 
         '401':
-          description: 認証エラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
+          description: 認証されていない、または無効なJWT
 
-        '409':
-          description: データが競合
+        '404':
+          description: JWTのsubに対応するユーザーが存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Email already exists
+                $ref: '#/components/schemas/ErrorResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
   /users:
     post:
@@ -509,85 +200,17 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - email
-                - password
-                - name
-                - characters
-              properties:
-                email:
-                  type: string
-                  format: email
-                  description: ユーザーのメールアドレス
-                  example: user@example.com
-                password:
-                  type: string
-                  format: password
-                  minLength: 8
-                  maxLength: 100
-                  description: ユーザーのパスワード
-                  example: password
-                name:
-                  type: string
-                  maxLength: 50
-                  description: ユーザーの名前
-                  example: John Doe
-                characters:
-                  type: array
-                  description: 使用キャラクター情報
-                  minItems: 1
-                  maxItems: 4
-                  items:
-                    type: object
-                    required:
-                      - character_id
-                      - rank
-                    properties:
-                      character_id:
-                        type: integer
-                        description: キャラクターID
-                        example: 1
-                      rank:
-                        type: string
-                        description: キャラクターのランク
-                        example: Master
-                      mr:
-                        type: integer
-                        description: Master以上の場合のMR
-                        example: 1800
-                play_time_start:
-                  type: string
-                  format: time
-                  description: プレイ開始時間
-                  example: "18:00"
-                play_time_end:
-                  type: string
-                  format: time
-                  description: プレイ終了時間
-                  example: "23:30"
-                message:
-                  type: string
-                  description: ユーザーのメッセージ
-                  example: Hello, world!
+              $ref: '#/components/schemas/UserCreateRequest'
       responses:
         '201':
-          description: ユーザー登録成功
+          description: 登録成功
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - id
-                properties:
-                  id:
-                    type: integer
-                    format: int64
-                    description: 登録されたユーザーのID
-                    example: 123
+                $ref: '#/components/schemas/UserCreateResponse'
 
         '400':
-          description: リクエストが不正
+          description: リクエストが不正、またはBean Validationエラー
           content:
             application/json:
               schema:
@@ -600,7 +223,7 @@ paths:
                 path: /api/users
 
         '409':
-          description: データが競合
+          description: emailが既に登録されている
           content:
             application/json:
               schema:
@@ -618,157 +241,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              example:
-                timestamp: "2026-09-18T12:00:00"
-                status: 500
-                error: Internal Server Error
-                message: "An unexpected error occurred."
-                path: /api/users
 
   /teams:
     get:
-      summary: チーム検索・一覧取得
-      description: 条件を指定してチームを検索・取得する
-      parameters:
-        - name: name
-          in: query
-          required: false
-          schema:
-            type: string
-          description: チーム名
-          example: FIGHTER TEAM
-
-        - name: tournament_id
-          in: query
-          required: false
-          schema:
-            type: integer
-          description: 大会ID
-          example: 1
-
-        - name: recruitment
-          in: query
-          required: false
-          schema:
-            type: boolean
-          description: メンバー募集中かどうか
-          example: true
-
-        - name: rank
-          in: query
-          required: false
-          schema:
-            type: string
-          description: 必要ランク
-          example: Master
-
-        - name: character_id
-          in: query
-          required: false
-          schema:
-            type: integer
-          description: 募集キャラクターID
-          example: 1
-
+      summary: チーム一覧取得
+      description: 有効なチームの一覧を取得する
       responses:
         '200':
-          description: チーム一覧取得成功
+          description: 取得成功
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  type: object
-                  required:
-                    - id
-                    - tournament_id
-                    - name
-                    - description
-                    - max_members
-                    - rank_requirement
-                    - character_requirements
-                    - recruitment_message
-                    - created_at
-                    - updated_at
-                  properties:
-                    id:
-                      type: integer
-                      description: チームID
-                      example: 1
-                    tournament_id:
-                      type: integer
-                      description: 大会ID
-                      example: 1
-                    name:
-                      type: string
-                      description: チーム名
-                      example: FIGHTER TEAM
-                    description:
-                      type: string
-                      description: チームの説明
-                      example: 楽しく大会に参加できるメンバーを募集しています
-                    max_members:
-                      type: integer
-                      description: チームの最大メンバー数
-                      example: 3
-                    rank_requirement:
-                      type: string
-                      description: 参加に必要なランク
-                      example: Master
-                    character_requirements:
-                      type: array
-                      description: 募集キャラクターID
-                      items:
-                        type: integer
-                      example:
-                        - 1
-                        - 2
-                    recruitment_message:
-                      type: string
-                      description: 募集メッセージ
-                      example: 一緒に大会に参加しましょう！
-                    created_at:
-                      type: string
-                      format: date-time
-                      description: 作成日時
-                      example: 2023-01-01T00:00:00Z
-                    updated_at:
-                      type: string
-                      format: date-time
-                      description: 更新日時
-                      example: 2023-01-02T00:00:00Z
-
-        '400':
-          description: リクエストが不正
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                  $ref: '#/components/schemas/TeamResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
     post:
       summary: チーム作成
-      description: 新しいチームを作成する
+      description: 認証済みユーザーをownerとして新しいチームを作成する
       security:
         - BearerAuth: []
       requestBody:
@@ -776,243 +273,85 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - tournament_id
-                - name
-                - description
-                - max_members
-                - rank_requirement
-                - character_requirements
-                - recruitment_message
-              properties:
-                tournament_id:
-                  type: integer
-                  description: 大会ID
-                  example: 1
-                name:
-                  type: string
-                  description: チーム名
-                  example: FIGHTER TEAM
-                description:
-                  type: string
-                  description: チームの説明
-                  example: 楽しく大会に参加できるメンバーを募集しています
-                max_members:
-                  type: integer
-                  description: チームの最大メンバー数
-                  example: 3
-                rank_requirement:
-                  type: string
-                  description: 参加に必要なランク
-                  example: Master
-                character_requirements:
-                  type: array
-                  description: 募集キャラクターID
-                  items:
-                    type: integer
-                  example:
-                    - 1
-                    - 2
-                recruitment_message:
-                  type: string
-                  description: 募集メッセージ
-                  example: 一緒に大会に参加しましょう！
+              $ref: '#/components/schemas/TeamCreateRequest'
       responses:
         '201':
-          description: チーム作成成功
+          description: 作成成功
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - id
-                properties:
-                  id:
-                    type: integer
-                    description: 作成されたチームのID
-                    example: 1
+                $ref: '#/components/schemas/TeamCreateResponse'
 
         '400':
-          description: リクエストが不正
+          description: リクエストが不正、またはBean Validationエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                $ref: '#/components/schemas/ErrorResponse'
 
         '401':
-          description: 認証エラー
+          description: 認証されていない、または無効なJWT
+
+        '404':
+          description: 指定したtournamentIdが存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
+                $ref: '#/components/schemas/ErrorResponse'
 
         '409':
-          description: データが競合
+          description: 同一Tournament内ですでにいずれかのTeamへ所属している
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Conflict
+                $ref: '#/components/schemas/ErrorResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
   /teams/{id}:
     get:
       summary: チーム詳細取得
-      description: 指定されたIDのチーム情報を取得する
+      description: 指定したIDのチームを取得する
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
+            format: int64
           description: チームID
           example: 1
 
       responses:
         '200':
-          description: チーム情報取得成功
+          description: 取得成功
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - id
-                  - tournament_id
-                  - name
-                  - description
-                  - max_members
-                  - rank_requirement
-                  - character_requirements
-                  - recruitment_message
-                  - created_at
-                  - updated_at
-                properties:
-                  id:
-                    type: integer
-                    description: チームID
-                    example: 1
-                  tournament_id:
-                    type: integer
-                    description: 大会ID
-                    example: 1
-                  name:
-                    type: string
-                    description: チーム名
-                    example: FIGHTER TEAM
-                  description:
-                    type: string
-                    description: チームの説明
-                    example: 楽しく大会に参加できるメンバーを募集しています
-                  max_members:
-                    type: integer
-                    description: チームの最大メンバー数
-                    example: 3
-                  rank_requirement:
-                    type: string
-                    description: 参加に必要なランク
-                    example: Master
-                  character_requirements:
-                    type: array
-                    description: 募集キャラクターID
-                    items:
-                      type: integer
-                    example:
-                      - 1
-                      - 2
-                  recruitment_message:
-                    type: string
-                    description: 募集メッセージ
-                    example: 一緒に大会に参加しましょう！
-                  created_at:
-                    type: string
-                    format: date-time
-                    description: 作成日時
-                    example: 2023-01-01T00:00:00Z
-                  updated_at:
-                    type: string
-                    format: date-time
-                    description: 更新日時
-                    example: 2023-01-02T00:00:00Z
-
-        '400':
-          description: リクエストが不正
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                $ref: '#/components/schemas/TeamResponse'
 
         '404':
-          description: 対象IDのチームデータなし
+          description: 指定したチームが存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Team not found
+                $ref: '#/components/schemas/ErrorResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
     patch:
-      summary: チーム情報更新
-      description: 指定されたチームの情報を更新する
+      summary: チーム更新
+      description: Team ownerが自身のチーム情報を部分更新する
       security:
         - BearerAuth: []
       parameters:
@@ -1021,6 +360,7 @@ paths:
           required: true
           schema:
             type: integer
+            format: int64
           description: チームID
           example: 1
       requestBody:
@@ -1028,360 +368,129 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                  description: チーム名
-                  example: FIGHTER TEAM
-                description:
-                  type: string
-                  description: チームの説明
-                  example: 楽しく大会に参加できるメンバーを募集しています
-                rank_requirement:
-                  type: string
-                  description: 参加に必要なランク
-                  example: Master
-                character_requirements:
-                  type: array
-                  description: 募集キャラクターID
-                  items:
-                    type: integer
-                  example:
-                    - 1
-                    - 2
-                recruitment_message:
-                  type: string
-                  description: 募集メッセージ
-                  example: 一緒に大会に参加しましょう！
+              $ref: '#/components/schemas/TeamUpdateRequest'
       responses:
-        '204':
-          description: チーム情報更新成功
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamResponse'
 
         '400':
-          description: リクエストが不正
+          description: リクエストが不正、またはBean Validationエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                $ref: '#/components/schemas/ErrorResponse'
 
         '401':
-          description: 認証エラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
+          description: 認証されていない、または無効なJWT
 
         '403':
-          description: 権限がない
+          description: Team ownerではないユーザーによる更新
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Forbidden
+                $ref: '#/components/schemas/ErrorResponse'
 
         '404':
-          description: 対象IDのチームデータなし
+          description: 指定したチームが存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Team not found
-
-        '409':
-          description: データが競合
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Conflict
+                $ref: '#/components/schemas/ErrorResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
   /teams/my:
     get:
-      summary: 自分のチーム一覧取得
-      description: ログイン中のユーザーが所属しているチーム一覧を取得する
+      summary: 自分が所属しているチーム一覧取得
+      description: 認証済みユーザーがTeamMemberとして所属しているチームの一覧を取得する
       security:
         - BearerAuth: []
       responses:
         '200':
-          description: チーム一覧取得成功
+          description: 取得成功
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  type: object
-                  required:
-                    - id
-                    - tournament_id
-                    - name
-                    - description
-                    - max_members
-                    - rank_requirement
-                    - character_requirements
-                    - recruitment_message
-                    - created_at
-                    - updated_at
-                  properties:
-                    id:
-                      type: integer
-                      description: チームID
-                      example: 1
-                    tournament_id:
-                      type: integer
-                      description: 大会ID
-                      example: 1
-                    name:
-                      type: string
-                      description: チーム名
-                      example: FIGHTER TEAM
-                    description:
-                      type: string
-                      description: チームの説明
-                      example: 楽しく大会に参加できるメンバーを募集しています
-                    max_members:
-                      type: integer
-                      description: チームの最大メンバー数
-                      example: 3
-                    rank_requirement:
-                      type: string
-                      description: 参加に必要なランク
-                      example: Master
-                    character_requirements:
-                      type: array
-                      description: 募集キャラクターID
-                      items:
-                        type: integer
-                      example:
-                        - 1
-                        - 2
-                    recruitment_message:
-                      type: string
-                      description: 募集メッセージ
-                      example: 一緒に大会に参加しましょう！
-                    created_at:
-                      type: string
-                      format: date-time
-                      description: 作成日時
-                      example: 2023-01-01T00:00:00Z
-                    updated_at:
-                      type: string
-                      format: date-time
-                      description: 更新日時
-                      example: 2023-01-02T00:00:00Z
+                  $ref: '#/components/schemas/TeamResponse'
 
         '401':
-          description: 認証エラー（ログインしていない）
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
-
-        '500':
-          description: サーバーエラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
-
-  /teams/{id}/members:
-    post:
-      summary: チームメンバー追加
-      description: 指定されたチームにメンバーを追加する
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-          description: チームID
-          example: 1
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - user_id
-              properties:
-                user_id:
-                  type: integer
-                  description: 追加するユーザーのID
-                  example: 123
-      responses:
-        '201':
-          description: チームメンバー追加成功
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - id
-                properties:
-                  id:
-                    type: integer
-                    description: 追加されたチームメンバーのID
-                    example: 1
-
-        '400':
-          description: リクエストが不正
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
-
-        '401':
-          description: 認証エラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
-
-        '403':
-          description: 権限がない
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Forbidden
+          description: 認証されていない、または無効なJWT
 
         '404':
-          description: 対象のチームまたはユーザーが存在しない
+          description: JWTのsubに対応するユーザーが存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Team or user not found
-
-        '409':
-          description: データが競合
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Conflict
+                $ref: '#/components/schemas/ErrorResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
-  /teams/{id}/members/{userId}:
-    delete:
-      summary: チームメンバー削除
-      description: 指定されたチームからメンバーを削除する
-      security:
-        - BearerAuth: []
+  /teams/{id}/members:
+    get:
+      summary: チームメンバー一覧取得
+      description: 指定したチームに所属しているメンバーの一覧を取得する
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
+            format: int64
+          description: チームID
+          example: 1
+      responses:
+        '200':
+          description: 取得成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeamMemberResponse'
+
+        '404':
+          description: 指定したチームが存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /teams/{teamId}/members/{userId}:
+    delete:
+      summary: チームメンバー削除
+      description: Team ownerが指定したメンバーをチームから削除する
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
           description: チームID
           example: 1
 
@@ -1390,82 +499,44 @@ paths:
           required: true
           schema:
             type: integer
+            format: int64
           description: 削除するユーザーのID
-          example: 123
+          example: 2
 
       responses:
         '204':
-          description: チームメンバー削除成功
-
-        '400':
-          description: リクエストが不正
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+          description: 削除成功
 
         '401':
-          description: 認証エラー
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Unauthorized
+          description: 認証されていない、または無効なJWT
 
         '403':
-          description: 権限がない
+          description: Team ownerではないユーザーによる削除
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Forbidden
+                $ref: '#/components/schemas/ErrorResponse'
 
         '404':
-          description: 対象のチームまたはユーザーが存在しない
+          description: 指定したチーム、または指定したメンバーが存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Team or user not found
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '409':
+          description: Team owner自身を削除しようとした
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
         '500':
           description: サーバーエラー
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
   /tournaments:
     get:
@@ -2052,73 +1123,52 @@ paths:
   /characters:
     get:
       summary: キャラクター一覧取得
-      description: キャラクター一覧を取得する
-      parameters:
-        - name: character_id
-          in: query
-          required: false
-          schema:
-            type: integer
-          description: キャラクターID
-          example: 1
-
-        - name: name
-          in: query
-          required: false
-          schema:
-            type: string
-          description: キャラクター名
-          example: Ryu
-
+      description: 登録されているキャラクターを一覧で取得する
       responses:
         '200':
-          description: キャラクター一覧取得成功
+          description: 取得成功
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  type: object
-                  required:
-                    - id
-                    - name
-                  properties:
-                    id:
-                      type: integer
-                      description: キャラクターID
-                      example: 1
-                    name:
-                      type: string
-                      description: キャラクター名
-                      example: Ryu
+                  $ref: '#/components/schemas/CharacterResponse'
+
+  /characters/{id}:
+    get:
+      summary: キャラクター詳細取得
+      description: 指定したIDのキャラクターを取得する
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: キャラクターID
+          example: 1
+
+      responses:
+        '200':
+          description: 取得成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CharacterResponse'
 
         '400':
-          description: リクエストが不正
+          description: IDの形式が不正
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Invalid request
+                $ref: '#/components/schemas/ErrorResponse'
 
-        '500':
-          description: サーバーエラー
+        '404':
+          description: 指定したキャラクターが存在しない
           content:
             application/json:
               schema:
-                type: object
-                required:
-                  - error
-                properties:
-                  error:
-                    type: string
-                    description: エラーメッセージ
-                    example: Internal server error
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   schemas:
@@ -2152,6 +1202,436 @@ components:
           type: string
           description: リクエストパス
           example: /api/users
+    CharacterResponse:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: キャラクターID
+          example: 1
+        name:
+          type: string
+          description: キャラクター名
+          example: Ryu
+    UserCharacterRequest:
+      type: object
+      required:
+        - characterId
+        - rank
+      properties:
+        characterId:
+          type: integer
+          format: int64
+          description: キャラクターID
+          example: 1
+        rank:
+          type: string
+          description: キャラクターのランク
+          example: MASTER
+        mr:
+          type: integer
+          nullable: true
+          description: Master以上の場合のMR
+          example: 1800
+    UserCharacterResponse:
+      type: object
+      required:
+        - characterId
+        - rank
+      properties:
+        characterId:
+          type: integer
+          format: int64
+          description: キャラクターID
+          example: 1
+        rank:
+          type: string
+          description: キャラクターのランク
+          example: MASTER
+        mr:
+          type: integer
+          nullable: true
+          description: Master以上の場合のMR
+          example: 1800
+    UserCreateRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+        - characters
+      properties:
+        email:
+          type: string
+          format: email
+          description: ユーザーのメールアドレス
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 100
+          description: パスワード
+          example: password123
+        name:
+          type: string
+          maxLength: 50
+          description: ユーザー名
+          example: John Doe
+        characters:
+          type: array
+          minItems: 1
+          maxItems: 4
+          description: 使用キャラクター情報(1〜4件)
+          items:
+            $ref: '#/components/schemas/UserCharacterRequest'
+        playTimeStart:
+          type: string
+          format: time
+          nullable: true
+          description: プレイ開始時間
+          example: "18:00:00"
+        playTimeEnd:
+          type: string
+          format: time
+          nullable: true
+          description: プレイ終了時間
+          example: "23:30:00"
+        message:
+          type: string
+          nullable: true
+          description: 自己紹介メッセージ
+          example: Hello, world!
+    UserCreateResponse:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 登録されたユーザーのID
+          example: 1
+    UserPublicResponse:
+      type: object
+      required:
+        - id
+        - name
+        - characters
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ユーザーID
+          example: 1
+        name:
+          type: string
+          description: ユーザー名
+          example: John Doe
+        characters:
+          type: array
+          description: 使用キャラクター情報
+          items:
+            $ref: '#/components/schemas/UserCharacterResponse'
+        playTimeStart:
+          type: string
+          format: time
+          nullable: true
+          description: プレイ開始時間
+          example: "18:00:00"
+        playTimeEnd:
+          type: string
+          format: time
+          nullable: true
+          description: プレイ終了時間
+          example: "23:30:00"
+        message:
+          type: string
+          nullable: true
+          description: 自己紹介メッセージ
+          example: Hello, world!
+        xId:
+          type: string
+          nullable: true
+          description: X（旧Twitter）のID
+          example: johndoe123
+        discordId:
+          type: string
+          nullable: true
+          description: DiscordのID
+          example: johndoe#1234
+        createdAt:
+          type: string
+          format: date-time
+          description: 作成日時
+          example: "2026-09-01T00:00:00"
+        updatedAt:
+          type: string
+          format: date-time
+          description: 更新日時
+          example: "2026-09-02T00:00:00"
+    UserMeResponse:
+      type: object
+      required:
+        - id
+        - name
+        - characters
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ユーザーID
+          example: 1
+        name:
+          type: string
+          description: ユーザー名
+          example: John Doe
+        characters:
+          type: array
+          description: 使用キャラクター情報
+          items:
+            $ref: '#/components/schemas/UserCharacterResponse'
+        playTimeStart:
+          type: string
+          format: time
+          nullable: true
+          description: プレイ開始時間
+          example: "18:00:00"
+        playTimeEnd:
+          type: string
+          format: time
+          nullable: true
+          description: プレイ終了時間
+          example: "23:30:00"
+        message:
+          type: string
+          nullable: true
+          description: 自己紹介メッセージ
+          example: Hello, world!
+        email:
+          type: string
+          format: email
+          nullable: true
+          description: メールアドレス(DB上NULL許容。将来的なSNSログイン対応のため)
+          example: user@example.com
+        xId:
+          type: string
+          nullable: true
+          description: X（旧Twitter）のID
+          example: johndoe123
+        discordId:
+          type: string
+          nullable: true
+          description: DiscordのID
+          example: johndoe#1234
+        createdAt:
+          type: string
+          format: date-time
+          description: 作成日時
+          example: "2026-09-01T00:00:00"
+        updatedAt:
+          type: string
+          format: date-time
+          description: 更新日時
+          example: "2026-09-02T00:00:00"
+    UserUpdateRequest:
+      type: object
+      description: 部分更新用リクエスト。指定したフィールドのみ更新され、省略したフィールドは変更されない。name/charactersは明示的にnullを指定すると400になる。
+      properties:
+        name:
+          type: string
+          maxLength: 50
+          description: ユーザー名（指定する場合は空文字不可）
+          example: John Doe
+        characters:
+          type: array
+          minItems: 1
+          maxItems: 4
+          description: 使用キャラクター情報(指定する場合は1〜4件)
+          items:
+            $ref: '#/components/schemas/UserCharacterRequest'
+        playTimeStart:
+          type: string
+          format: time
+          nullable: true
+          description: プレイ開始時間
+          example: "18:00:00"
+        playTimeEnd:
+          type: string
+          format: time
+          nullable: true
+          description: プレイ終了時間
+          example: "23:30:00"
+        message:
+          type: string
+          nullable: true
+          description: 自己紹介メッセージ
+          example: Hello, world!
+        xId:
+          type: string
+          nullable: true
+          description: X（旧Twitter）のID
+          example: johndoe123
+        discordId:
+          type: string
+          nullable: true
+          description: DiscordのID
+          example: johndoe#1234
+    TeamMemberResponse:
+      type: object
+      required:
+        - userId
+        - userName
+        - joinedAt
+      properties:
+        userId:
+          type: integer
+          format: int64
+          description: ユーザーID
+          example: 1
+        userName:
+          type: string
+          description: ユーザー名
+          example: Owner User
+        joinedAt:
+          type: string
+          format: date-time
+          description: 加入日時
+          example: "2026-09-01T00:00:00"
+    TeamCreateRequest:
+      type: object
+      required:
+        - tournamentId
+        - name
+      properties:
+        tournamentId:
+          type: integer
+          format: int64
+          description: 大会ID
+          example: 1
+        name:
+          type: string
+          maxLength: 255
+          description: チーム名
+          example: Team Ryu
+        rankRequirement:
+          type: string
+          maxLength: 30
+          nullable: true
+          description: 募集ランク条件
+          example: MASTER
+        characterRequirements:
+          type: array
+          nullable: true
+          description: 募集キャラクターIDのリスト
+          items:
+            type: integer
+            format: int64
+          example:
+            - 1
+            - 2
+        recruitmentMessage:
+          type: string
+          nullable: true
+          description: 募集メッセージ
+          example: 誰でも歓迎です
+    TeamCreateResponse:
+      type: object
+      required:
+        - id
+        - tournamentId
+        - ownerId
+        - name
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: チームID
+          example: 1
+        tournamentId:
+          type: integer
+          format: int64
+          description: 所属する大会ID
+          example: 1
+        ownerId:
+          type: integer
+          format: int64
+          description: チームownerのユーザーID
+          example: 1
+        name:
+          type: string
+          description: チーム名
+          example: Team Ryu
+        rankRequirement:
+          type: string
+          nullable: true
+          description: 募集ランク条件
+          example: MASTER
+        characterRequirements:
+          type: array
+          nullable: true
+          description: 募集キャラクターIDのリスト
+          items:
+            type: integer
+            format: int64
+          example:
+            - 1
+            - 2
+        recruitmentMessage:
+          type: string
+          nullable: true
+          description: 募集メッセージ
+          example: 誰でも歓迎です
+        createdAt:
+          type: string
+          format: date-time
+          description: 作成日時
+          example: "2026-09-01T00:00:00"
+        updatedAt:
+          type: string
+          format: date-time
+          description: 更新日時
+          example: "2026-09-02T00:00:00"
+    TeamUpdateRequest:
+      type: object
+      description: 部分更新用リクエスト。指定したフィールドのみ更新され、省略したフィールドは変更されない。nameは明示的にnullを指定すると400になる。
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          description: チーム名（指定する場合は空文字不可）
+          example: Team Ryu
+        rankRequirement:
+          type: string
+          maxLength: 30
+          nullable: true
+          description: 募集ランク条件
+          example: MASTER
+        characterRequirements:
+          type: array
+          nullable: true
+          description: 募集キャラクターIDのリスト
+          items:
+            type: integer
+            format: int64
+          example:
+            - 1
+            - 2
+        recruitmentMessage:
+          type: string
+          nullable: true
+          description: 募集メッセージ
+          example: 誰でも歓迎です
     RecruitmentApplicationResponse:
       type: object
       required:
