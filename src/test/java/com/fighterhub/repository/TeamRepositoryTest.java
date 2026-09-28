@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.fighterhub.dto.UserCharacterRequest;
 import com.fighterhub.dto.UserCreateRequest;
@@ -140,6 +141,29 @@ class TeamRepositoryTest {
         softDeleteTeam(team.getId());
 
         assertTrue(teamRepository.findActiveTeamById(team.getId()).isEmpty());
+    }
+
+    // PESSIMISTIC_WRITEロックの取得にはアクティブなTransactionが必須のため、
+    // 本番でのService呼び出し(@Transactional内)を模して、テストメソッド自体を@Transactionalにする。
+    @Test
+    @Transactional
+    void findActiveTeamByIdForUpdate_有効なTeamをlock付きで取得でき無効なTeamは取得できない() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+
+        Optional<Team> found = teamRepository.findActiveTeamByIdForUpdate(team.getId());
+
+        assertTrue(found.isPresent());
+        assertEquals(team.getId(), found.get().getId());
+        // findActiveTeamByIdと同じ有効性条件(Team/Tournament/ownerのdeleteFlag)であることを確認する。
+        assertEquals(tournament.getId(), found.get().getTournament().getId());
+        assertEquals(owner.getId(), found.get().getOwner().getId());
+
+        softDeleteTeam(team.getId());
+
+        assertTrue(teamRepository.findActiveTeamByIdForUpdate(team.getId()).isEmpty());
     }
 
     private Long anyExistingCharacterId() {

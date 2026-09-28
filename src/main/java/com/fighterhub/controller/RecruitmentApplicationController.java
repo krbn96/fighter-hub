@@ -71,7 +71,7 @@ public class RecruitmentApplicationController {
         ),
         @ApiResponse(
             responseCode = "409",
-            description = "同一大会内ですでにいずれかのチームへ所属している、またはこのチームへPENDING状態の申請がすでに存在する",
+            description = "同一大会内ですでにいずれかのチームへ所属している、または同一大会内にPENDING状態の申請がすでに存在する",
             content = @Content(
                 schema = @Schema(implementation = ErrorResponse.class)
             )

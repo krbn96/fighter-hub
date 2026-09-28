@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.fighterhub.dto.UserCharacterRequest;
 import com.fighterhub.dto.UserCreateRequest;
@@ -83,7 +84,7 @@ class RecruitmentApplicationRepositoryTest {
     }
 
     @Test
-    void existsByTeam_IdAndUser_IdAndStatus_teamIdとuserIdとPENDINGが一致する場合はtrueを返す() {
+    void existsByUser_IdAndTeam_Tournament_IdAndStatus_同一Userと同一TournamentとPENDINGが一致する場合はtrueを返す() {
         Long characterId = anyExistingCharacterId();
         User owner = createUser(characterId);
         User applicant = createUser(characterId);
@@ -91,50 +92,67 @@ class RecruitmentApplicationRepositoryTest {
         Team team = createTeam(tournament, owner);
         createRecruitmentApplication(team, applicant, "よろしくお願いします");
 
-        assertTrue(recruitmentApplicationRepository.existsByTeam_IdAndUser_IdAndStatus(
-                team.getId(), applicant.getId(), RecruitmentApplicationStatus.PENDING));
+        assertTrue(recruitmentApplicationRepository.existsByUser_IdAndTeam_Tournament_IdAndStatus(
+                applicant.getId(), tournament.getId(), RecruitmentApplicationStatus.PENDING));
     }
 
     @Test
-    void existsByTeam_IdAndUser_IdAndStatus_別Teamまたは別Userの場合はfalseを返す() {
+    void existsByUser_IdAndTeam_Tournament_IdAndStatus_同一Userでも別TeamのPENDINGなら同じTournamentならtrueを返す() {
+        Long characterId = anyExistingCharacterId();
+        User otherOwner = createUser(characterId);
+        User applicant = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team otherTeamSameTournament = createTeam(tournament, otherOwner);
+        // Team単位ではなくTournament単位で判定するため、別Teamへの申請でもtrueになることを確認する。
+        createRecruitmentApplication(otherTeamSameTournament, applicant, "よろしくお願いします");
+
+        assertTrue(recruitmentApplicationRepository.existsByUser_IdAndTeam_Tournament_IdAndStatus(
+                applicant.getId(), tournament.getId(), RecruitmentApplicationStatus.PENDING));
+    }
+
+    @Test
+    void existsByUser_IdAndTeam_Tournament_IdAndStatus_別Tournamentまたは別Userまたは別statusの場合はfalseを返す() {
         Long characterId = anyExistingCharacterId();
         User owner = createUser(characterId);
         User applicant = createUser(characterId);
         User otherUser = createUser(characterId);
         Tournament tournament = createTournament();
+        Tournament otherTournament = createTournament();
         Team team = createTeam(tournament, owner);
-        Team otherTeam = createTeam(tournament, otherUser);
-        createRecruitmentApplication(team, applicant, "よろしくお願いします");
+        RecruitmentApplication application = createRecruitmentApplication(team, applicant, "よろしくお願いします");
 
-        assertFalse(recruitmentApplicationRepository.existsByTeam_IdAndUser_IdAndStatus(
-                otherTeam.getId(), applicant.getId(), RecruitmentApplicationStatus.PENDING));
-        assertFalse(recruitmentApplicationRepository.existsByTeam_IdAndUser_IdAndStatus(
-                team.getId(), otherUser.getId(), RecruitmentApplicationStatus.PENDING));
+        // 別Tournament
+        assertFalse(recruitmentApplicationRepository.existsByUser_IdAndTeam_Tournament_IdAndStatus(
+                applicant.getId(), otherTournament.getId(), RecruitmentApplicationStatus.PENDING));
+        // 別User
+        assertFalse(recruitmentApplicationRepository.existsByUser_IdAndTeam_Tournament_IdAndStatus(
+                otherUser.getId(), tournament.getId(), RecruitmentApplicationStatus.PENDING));
+
+        // REJECTEDのみの場合はPENDING確認にヒットしない
+        jdbcTemplate.update(
+                "UPDATE t_recruitment_application SET status = 'REJECTED' WHERE id = ?",
+                application.getId());
+        assertFalse(recruitmentApplicationRepository.existsByUser_IdAndTeam_Tournament_IdAndStatus(
+                applicant.getId(), tournament.getId(), RecruitmentApplicationStatus.PENDING));
     }
 
+    // PESSIMISTIC_WRITEロックの取得にはアクティブなTransactionが必須のため、
+    // 本番でのService呼び出し(@Transactional内)を模して、テストメソッド自体を@Transactionalにする。
     @Test
-    void existsByTeam_IdAndUser_IdAndStatus_APPROVEDまたはREJECTEDの場合はPENDING確認にヒットしない() {
+    @Transactional
+    void findByIdForUpdate_lock付きでApplicationを取得できる() {
         Long characterId = anyExistingCharacterId();
         User owner = createUser(characterId);
         User applicant = createUser(characterId);
         Tournament tournament = createTournament();
         Team team = createTeam(tournament, owner);
-        RecruitmentApplication approvedApplication =
-                createRecruitmentApplication(team, applicant, "よろしくお願いします");
+        RecruitmentApplication application = createRecruitmentApplication(team, applicant, "よろしくお願いします");
 
-        jdbcTemplate.update(
-                "UPDATE t_recruitment_application SET status = 'APPROVED' WHERE id = ?",
-                approvedApplication.getId());
+        Optional<RecruitmentApplication> found =
+                recruitmentApplicationRepository.findByIdForUpdate(application.getId());
 
-        assertFalse(recruitmentApplicationRepository.existsByTeam_IdAndUser_IdAndStatus(
-                team.getId(), applicant.getId(), RecruitmentApplicationStatus.PENDING));
-
-        jdbcTemplate.update(
-                "UPDATE t_recruitment_application SET status = 'REJECTED' WHERE id = ?",
-                approvedApplication.getId());
-
-        assertFalse(recruitmentApplicationRepository.existsByTeam_IdAndUser_IdAndStatus(
-                team.getId(), applicant.getId(), RecruitmentApplicationStatus.PENDING));
+        assertTrue(found.isPresent());
+        assertEquals(application.getId(), found.get().getId());
     }
 
     @Test

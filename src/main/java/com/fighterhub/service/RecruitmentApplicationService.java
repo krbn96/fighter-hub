@@ -45,6 +45,9 @@ public class RecruitmentApplicationService {
         this.userRepository = userRepository;
     }
 
+    // User lock取得後に同一Tournament所属・同一Tournament PENDINGの両方を確認することで、
+    // 同じUserから同一Tournament内の別Teamへの申請が同時に来ても、後続TransactionはUser lockを
+    // 待ち、先行Transaction commit後のPENDINGを確認して409になる(直列化)。
     @Transactional
     public RecruitmentApplicationResponse createApplication(
             Long userId, Long teamId, RecruitmentApplicationCreateRequest request) {
@@ -56,17 +59,19 @@ public class RecruitmentApplicationService {
             throw new CannotApplyToOwnTeamException(userId, teamId);
         }
 
-        if (teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(userId, team.getTournament().getId())) {
-            throw new DuplicateTournamentMembershipException(userId, team.getTournament().getId());
-        }
-
-        if (recruitmentApplicationRepository.existsByTeam_IdAndUser_IdAndStatus(
-                teamId, userId, RecruitmentApplicationStatus.PENDING)) {
-            throw new DuplicatePendingApplicationException(teamId, userId);
-        }
-
-        User user = userRepository.findByIdAndDeleteFlagFalse(userId)
+        User user = userRepository.findByIdAndDeleteFlagFalseForUpdate(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
+
+        Long tournamentId = team.getTournament().getId();
+
+        if (teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(userId, tournamentId)) {
+            throw new DuplicateTournamentMembershipException(userId, tournamentId);
+        }
+
+        if (recruitmentApplicationRepository.existsByUser_IdAndTeam_Tournament_IdAndStatus(
+                userId, tournamentId, RecruitmentApplicationStatus.PENDING)) {
+            throw new DuplicatePendingApplicationException(tournamentId, userId);
+        }
 
         RecruitmentApplication application = RecruitmentApplication.create(team, user, request.message());
         RecruitmentApplication savedApplication = recruitmentApplicationRepository.save(application);
@@ -97,16 +102,17 @@ public class RecruitmentApplicationService {
 
     // TeamMember作成とApplicationのAPPROVED変更は同一Transaction内で行い、
     // 片方だけ成功する状態を作らない。
+    // lock取得順序は必ずTeam → RecruitmentApplication → Userとし、この順序を入れ替えない。
     @Transactional
     public RecruitmentApplicationResponse approveApplication(Long currentUserId, Long teamId, Long applicationId) {
-        Team team = teamRepository.findActiveTeamById(teamId)
+        Team team = teamRepository.findActiveTeamByIdForUpdate(teamId)
                 .orElseThrow(() -> new TeamNotFoundException(teamId));
 
         if (!team.getOwner().getId().equals(currentUserId)) {
             throw new NotTeamOwnerException(currentUserId, teamId);
         }
 
-        RecruitmentApplication application = recruitmentApplicationRepository.findById(applicationId)
+        RecruitmentApplication application = recruitmentApplicationRepository.findByIdForUpdate(applicationId)
                 .orElseThrow(() -> new RecruitmentApplicationNotFoundException(teamId, applicationId));
 
         // 別TeamのApplicationであることを外部へ公開しないため、404として扱う。
@@ -118,11 +124,13 @@ public class RecruitmentApplicationService {
             throw new ApplicationAlreadyProcessedException(applicationId);
         }
 
+        User lockedUser = userRepository.findByIdAndDeleteFlagFalseForUpdate(application.getUser().getId())
+                .orElseThrow(() -> new UserNotFoundException(application.getUser().getId()));
+
         // 申請から承認までの間に別Teamへ加入している可能性があるため、承認時にも再確認する。
         if (teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(
-                application.getUser().getId(), team.getTournament().getId())) {
-            throw new DuplicateTournamentMembershipException(
-                    application.getUser().getId(), team.getTournament().getId());
+                lockedUser.getId(), team.getTournament().getId())) {
+            throw new DuplicateTournamentMembershipException(lockedUser.getId(), team.getTournament().getId());
         }
 
         long currentMemberCount = teamMemberRepository.countByTeam_Id(teamId);
@@ -130,13 +138,15 @@ public class RecruitmentApplicationService {
             throw new TeamFullException(teamId);
         }
 
-        teamMemberRepository.save(TeamMember.create(team, application.getUser()));
+        teamMemberRepository.save(TeamMember.create(team, lockedUser));
 
         application.approve();
 
         return toRecruitmentApplicationResponse(application);
     }
 
+    // rejectはTeam定員・TeamMember・User所属を変更しないため、Team/UserのWRITE LOCKは取得しない。
+    // Applicationの行ロックのみでapprove vs reject / reject vs rejectを直列化する。
     @Transactional
     public RecruitmentApplicationResponse rejectApplication(Long currentUserId, Long teamId, Long applicationId) {
         Team team = teamRepository.findActiveTeamById(teamId)
@@ -146,7 +156,7 @@ public class RecruitmentApplicationService {
             throw new NotTeamOwnerException(currentUserId, teamId);
         }
 
-        RecruitmentApplication application = recruitmentApplicationRepository.findById(applicationId)
+        RecruitmentApplication application = recruitmentApplicationRepository.findByIdForUpdate(applicationId)
                 .orElseThrow(() -> new RecruitmentApplicationNotFoundException(teamId, applicationId));
 
         if (!application.getTeam().getId().equals(teamId)) {
