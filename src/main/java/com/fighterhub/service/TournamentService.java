@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.fighterhub.dto.TournamentCreateRequest;
 import com.fighterhub.dto.TournamentResponse;
+import com.fighterhub.dto.TournamentUpdateRequest;
 import com.fighterhub.entity.Tournament;
 import com.fighterhub.entity.User;
 import com.fighterhub.entity.UserRole;
@@ -44,12 +45,7 @@ public class TournamentService {
 
     @Transactional
     public TournamentResponse createTournament(Long currentUserId, TournamentCreateRequest request) {
-        User user = userRepository.findByIdAndDeleteFlagFalse(currentUserId)
-                .orElseThrow(() -> new UserNotFoundException(currentUserId));
-
-        if (user.getRole() != UserRole.ADMIN) {
-            throw new NotAdminException(currentUserId);
-        }
+        validateAdmin(currentUserId);
 
         Tournament tournament = Tournament.create(
                 request.name(),
@@ -61,6 +57,60 @@ public class TournamentService {
         Tournament savedTournament = tournamentRepository.save(tournament);
 
         return toTournamentResponse(savedTournament);
+    }
+
+    @Transactional
+    public TournamentResponse updateTournament(Long currentUserId, Long id, TournamentUpdateRequest request) {
+        validateAdmin(currentUserId);
+
+        Tournament tournament = tournamentRepository.findByIdAndDeleteFlagFalse(id)
+                .orElseThrow(() -> new TournamentNotFoundException(id));
+
+        if (!request.name().isUndefined()) {
+            tournament.updateName(request.name().get());
+        }
+
+        if (!request.teamSize().isUndefined()) {
+            tournament.updateTeamSize(request.teamSize().get());
+        }
+
+        if (!request.startAt().isUndefined()) {
+            tournament.updateStartAt(request.startAt().get());
+        }
+
+        if (!request.maxPlayers().isUndefined()) {
+            tournament.updateMaxPlayers(request.maxPlayers().get());
+        }
+
+        if (!request.status().isUndefined()) {
+            tournament.updateStatus(request.status().get());
+        }
+
+        // dirty checkingによるUPDATEはtransactionコミット時までflushされないため、
+        // flushしないまま生成すると@UpdateTimestampが未反映のupdatedAtをレスポンスに含めてしまう。
+        tournamentRepository.flush();
+
+        return toTournamentResponse(tournament);
+    }
+
+    @Transactional
+    public void deleteTournament(Long currentUserId, Long id) {
+        validateAdmin(currentUserId);
+
+        Tournament tournament = tournamentRepository.findByIdAndDeleteFlagFalse(id)
+                .orElseThrow(() -> new TournamentNotFoundException(id));
+
+        tournament.deactivate();
+    }
+
+    // ADMIN判定をcreate/update/deleteで共通化する。
+    private void validateAdmin(Long currentUserId) {
+        User user = userRepository.findByIdAndDeleteFlagFalse(currentUserId)
+                .orElseThrow(() -> new UserNotFoundException(currentUserId));
+
+        if (user.getRole() != UserRole.ADMIN) {
+            throw new NotAdminException(currentUserId);
+        }
     }
 
     private TournamentResponse toTournamentResponse(Tournament tournament) {

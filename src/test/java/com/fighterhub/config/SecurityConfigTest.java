@@ -318,6 +318,22 @@ class SecurityConfigTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    // PATCH/DELETE /api/tournaments/{id}もGET専用のpermitAll matcherに一致しないため、
+    // anyRequest().authenticated()の対象になることを確認する。
+    @Test
+    void PATCH_apiTournaments数値idは認証なしでは401を返しpermitAllにならない() throws Exception {
+        mockMvc.perform(patch("/api/tournaments/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void DELETE_apiTournaments数値idは認証なしでは401を返しpermitAllにならない() throws Exception {
+        mockMvc.perform(delete("/api/tournaments/1"))
+                .andExpect(status().isUnauthorized());
+    }
+
     private String generateValidToken() {
         Instant issuedAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
         Instant expiresAt = issuedAt.plusSeconds(3600);

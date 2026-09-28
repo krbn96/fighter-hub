@@ -2,6 +2,7 @@ package com.fighterhub.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -20,9 +21,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.openapitools.jackson.nullable.JsonNullable;
 
 import com.fighterhub.dto.TournamentCreateRequest;
 import com.fighterhub.dto.TournamentResponse;
+import com.fighterhub.dto.TournamentUpdateRequest;
 import com.fighterhub.entity.Tournament;
 import com.fighterhub.entity.User;
 import com.fighterhub.entity.UserRole;
@@ -59,6 +62,18 @@ class TournamentServiceTest {
                 64,
                 "OPEN"
         );
+    }
+
+    private static TournamentUpdateRequest allUndefinedUpdateRequest() {
+        return new TournamentUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined());
+    }
+
+    private Tournament newRealTournament() {
+        return Tournament.create(
+                "STREET FIGHTER 6 CUP", 3, LocalDateTime.of(2026, 10, 1, 19, 0), 64, "OPEN");
     }
 
     private Tournament mockTournament() {
@@ -164,5 +179,95 @@ class TournamentServiceTest {
                 () -> tournamentService.createTournament(999L, sampleCreateRequest()));
 
         verify(tournamentRepository, never()).save(any());
+    }
+
+    @Test
+    void updateTournament_ADMINなら指定フィールドを更新でき未指定フィールドは変更されない() {
+        User admin = mockUser(UserRole.ADMIN);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(admin));
+
+        Tournament tournament = newRealTournament();
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(100L)).thenReturn(Optional.of(tournament));
+
+        TournamentUpdateRequest request = new TournamentUpdateRequest(
+                JsonNullable.of("New Cup Name"),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined()
+        );
+
+        TournamentResponse response = tournamentService.updateTournament(1L, 100L, request);
+
+        assertEquals("New Cup Name", response.name());
+        // 未指定フィールドは変更されない。
+        assertEquals(3, response.teamSize());
+        assertEquals(64, response.maxPlayers());
+        assertEquals("OPEN", response.status());
+        verify(tournamentRepository, times(1)).flush();
+    }
+
+    @Test
+    void updateTournament_USERの場合_NotAdminExceptionを投げTournament取得もflushも行われない() {
+        User user = mockUser(UserRole.USER);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        assertThrows(
+                NotAdminException.class,
+                () -> tournamentService.updateTournament(1L, 100L, allUndefinedUpdateRequest()));
+
+        verify(tournamentRepository, never()).findByIdAndDeleteFlagFalse(any());
+        verify(tournamentRepository, never()).flush();
+    }
+
+    @Test
+    void updateTournament_Tournamentが存在しない場合_TournamentNotFoundExceptionを投げる() {
+        User admin = mockUser(UserRole.ADMIN);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(admin));
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(999L)).thenReturn(Optional.empty());
+
+        assertThrows(
+                TournamentNotFoundException.class,
+                () -> tournamentService.updateTournament(1L, 999L, allUndefinedUpdateRequest()));
+
+        verify(tournamentRepository, never()).flush();
+    }
+
+    @Test
+    void deleteTournament_ADMINならdeleteFlagがtrueになりRepositoryのdeleteは使用されない() {
+        User admin = mockUser(UserRole.ADMIN);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(admin));
+
+        Tournament tournament = newRealTournament();
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(100L)).thenReturn(Optional.of(tournament));
+
+        tournamentService.deleteTournament(1L, 100L);
+
+        assertTrue(tournament.isDeleteFlag());
+        verify(tournamentRepository, never()).delete(any());
+        verify(tournamentRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void deleteTournament_USERの場合_NotAdminExceptionを投げTournamentは取得されない() {
+        User user = mockUser(UserRole.USER);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        assertThrows(
+                NotAdminException.class,
+                () -> tournamentService.deleteTournament(1L, 100L));
+
+        verify(tournamentRepository, never()).findByIdAndDeleteFlagFalse(any());
+    }
+
+    @Test
+    void deleteTournament_Tournamentが存在しないまたは既削除の場合_TournamentNotFoundExceptionを投げる() {
+        User admin = mockUser(UserRole.ADMIN);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(admin));
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(999L)).thenReturn(Optional.empty());
+
+        assertThrows(
+                TournamentNotFoundException.class,
+                () -> tournamentService.deleteTournament(1L, 999L));
     }
 }

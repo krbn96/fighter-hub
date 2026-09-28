@@ -2,11 +2,14 @@ package com.fighterhub.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -29,6 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.fighterhub.config.SecurityConfig;
 import com.fighterhub.dto.TournamentCreateRequest;
 import com.fighterhub.dto.TournamentResponse;
+import com.fighterhub.dto.TournamentUpdateRequest;
 import com.fighterhub.exception.NotAdminException;
 import com.fighterhub.exception.TournamentNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
@@ -225,5 +229,131 @@ class TournamentControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(tournamentService, never()).createTournament(any(), any());
+    }
+
+    @Test
+    void updateTournament_JWTありvalidリクエストの場合_200を返す() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        when(tournamentService.updateTournament(eq(1L), eq(100L), any(TournamentUpdateRequest.class)))
+                .thenReturn(sampleResponse(100L));
+
+        String requestBody = """
+                {
+                  "name": "New Cup Name"
+                }
+                """;
+
+        mockMvc.perform(patch("/api/tournaments/100")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(100));
+
+        verify(tournamentService, times(1))
+                .updateTournament(eq(1L), eq(100L), any(TournamentUpdateRequest.class));
+    }
+
+    @Test
+    void updateTournament_JWTなしの場合_401を返しupdateTournamentは呼ばれない() throws Exception {
+        mockMvc.perform(patch("/api/tournaments/100")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
+
+        verify(tournamentService, never()).updateTournament(any(), any(), any());
+    }
+
+    @Test
+    void updateTournament_ServiceがNotAdminExceptionを投げた場合_403を返す() throws Exception {
+        Jwt jwt = validJwt("2");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        when(tournamentService.updateTournament(eq(2L), eq(100L), any(TournamentUpdateRequest.class)))
+                .thenThrow(new NotAdminException(2L));
+
+        mockMvc.perform(patch("/api/tournaments/100")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updateTournament_ServiceがTournamentNotFoundExceptionを投げた場合_404を返す() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        when(tournamentService.updateTournament(eq(1L), eq(999L), any(TournamentUpdateRequest.class)))
+                .thenThrow(new TournamentNotFoundException(999L));
+
+        mockMvc.perform(patch("/api/tournaments/999")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void updateTournament_nameが明示的nullの場合_400を返しupdateTournamentは呼ばれない() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+
+        String requestBody = """
+                {
+                  "name": null
+                }
+                """;
+
+        mockMvc.perform(patch("/api/tournaments/100")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isBadRequest());
+
+        verify(tournamentService, never()).updateTournament(any(), any(), any());
+    }
+
+    @Test
+    void deleteTournament_JWTありvalidリクエストの場合_204を返す() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+
+        mockMvc.perform(delete("/api/tournaments/100")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isNoContent());
+
+        verify(tournamentService, times(1)).deleteTournament(1L, 100L);
+    }
+
+    @Test
+    void deleteTournament_JWTなしの場合_401を返しdeleteTournamentは呼ばれない() throws Exception {
+        mockMvc.perform(delete("/api/tournaments/100"))
+                .andExpect(status().isUnauthorized());
+
+        verify(tournamentService, never()).deleteTournament(any(), any());
+    }
+
+    @Test
+    void deleteTournament_ServiceがNotAdminExceptionを投げた場合_403を返す() throws Exception {
+        Jwt jwt = validJwt("2");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        doThrow(new NotAdminException(2L))
+                .when(tournamentService).deleteTournament(2L, 100L);
+
+        mockMvc.perform(delete("/api/tournaments/100")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void deleteTournament_ServiceがTournamentNotFoundExceptionを投げた場合_404を返す() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        doThrow(new TournamentNotFoundException(999L))
+                .when(tournamentService).deleteTournament(1L, 999L);
+
+        mockMvc.perform(delete("/api/tournaments/999")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isNotFound());
     }
 }

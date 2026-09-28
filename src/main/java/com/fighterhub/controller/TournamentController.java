@@ -7,7 +7,9 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fighterhub.dto.ErrorResponse;
 import com.fighterhub.dto.TournamentCreateRequest;
 import com.fighterhub.dto.TournamentResponse;
+import com.fighterhub.dto.TournamentUpdateRequest;
 import com.fighterhub.service.TournamentService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -144,5 +147,105 @@ public class TournamentController {
             @Valid @RequestBody TournamentCreateRequest request) {
         Long userId = Long.valueOf(jwt.getSubject());
         return tournamentService.createTournament(userId, request);
+    }
+
+    @Operation(
+        summary = "大会更新",
+        description = "ADMINユーザーが大会情報を部分更新します。"
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "更新成功",
+            content = @Content(
+                schema = @Schema(implementation = TournamentResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "リクエストが不正、またはBean Validationエラー",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "認証されていない、または無効なJWT"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "ADMINではないユーザーによる更新",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "JWTのsubに対応するユーザー、または指定した大会が存在しない",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "サーバーエラー",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    @PatchMapping("/{id}")
+    public TournamentResponse updateTournament(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long id,
+            @Valid @RequestBody TournamentUpdateRequest request) {
+        Long userId = Long.valueOf(jwt.getSubject());
+        return tournamentService.updateTournament(userId, id, request);
+    }
+
+    @Operation(
+        summary = "大会削除",
+        description = "ADMINユーザーが大会を論理削除します。"
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "204",
+            description = "削除成功"
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "認証されていない、または無効なJWT"
+        ),
+        @ApiResponse(
+            responseCode = "403",
+            description = "ADMINではないユーザーによる削除",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "JWTのsubに対応するユーザー、または指定した大会が存在しない",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "サーバーエラー",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @DeleteMapping("/{id}")
+    public void deleteTournament(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long id) {
+        Long userId = Long.valueOf(jwt.getSubject());
+        tournamentService.deleteTournament(userId, id);
     }
 }

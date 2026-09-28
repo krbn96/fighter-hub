@@ -68,6 +68,31 @@ public class Tournament {
         return tournament;
     }
 
+    public void updateName(String name) {
+        this.name = name;
+    }
+
+    public void updateTeamSize(Integer teamSize) {
+        this.teamSize = teamSize;
+    }
+
+    public void updateStartAt(LocalDateTime startAt) {
+        this.startAt = startAt;
+    }
+
+    public void updateMaxPlayers(Integer maxPlayers) {
+        this.maxPlayers = maxPlayers;
+    }
+
+    public void updateStatus(String status) {
+        this.status = status;
+    }
+
+    // 物理DELETEは行わず、deleteFlagをtrueにする論理削除。
+    public void deactivate() {
+        this.deleteFlag = true;
+    }
+
     public Long getId() {
         return id;
     }
