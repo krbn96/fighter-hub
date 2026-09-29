@@ -1,7 +1,11 @@
 <template>
-  <div class="about">
-    <h1>This is an about page</h1>
-  </div>
+  <main class="about">
+    <h1>About FIGHTER HUB</h1>
+    <p>
+      FIGHTER HUBは、格闘ゲームのチーム戦大会に参加するプレイヤー向けの、
+      チーム作成・メンバー募集・参加申請を支援するWebアプリです。
+    </p>
+  </main>
 </template>
 
 <style>

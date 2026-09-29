@@ -222,6 +222,11 @@ describe('TeamDetailView', () => {
     expect(createApplication).toHaveBeenCalledWith(String(sampleTeam.id), { message: null })
     expect(wrapper.text()).toContain('参加申請しました')
     expect(wrapper.find('form').exists()).toBe(false)
+
+    const links = wrapper.findAllComponents(RouterLinkStub)
+    const myApplicationsLink = links.find((link) => link.text().includes('自分の参加申請を見る'))
+    expect(myApplicationsLink).toBeDefined()
+    expect(myApplicationsLink?.props('to')).toBe('/applications/my')
   })
 
   it('参加申請409時に専用メッセージが表示される', async () => {

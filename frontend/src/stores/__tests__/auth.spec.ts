@@ -69,6 +69,21 @@ describe('useAuthStore', () => {
     expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull()
   })
 
+  it('login時、token取得後のfetchMe失敗で認証状態がロールバックされる', async () => {
+    vi.mocked(loginRequest).mockResolvedValue({ accessToken: 'token-123' })
+    vi.mocked(fetchMe).mockRejectedValue(new Error('Unauthorized'))
+
+    const authStore = useAuthStore()
+    await expect(authStore.login('test@example.com', 'password123')).rejects.toThrow(
+      'Unauthorized',
+    )
+
+    expect(authStore.token).toBeNull()
+    expect(authStore.user).toBeNull()
+    expect(authStore.isAuthenticated).toBe(false)
+    expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull()
+  })
+
   it('logoutでtoken/userとlocalStorageがクリアされAPIは呼ばれない', async () => {
     vi.mocked(loginRequest).mockResolvedValue({ accessToken: 'token-123' })
     vi.mocked(fetchMe).mockResolvedValue(dummyUser)

@@ -47,6 +47,22 @@ FIGHTER HUBでは、大会ごとにチームを作成してメンバーを募集
 - Swagger UIによるAPI仕様の確認（Bearer認証対応）
 - 共通エラーハンドリング
 
+## Implemented Frontend Features
+
+Week 7でVue 3 + TypeScriptによるフロントエンドを実装しました。
+
+- ログイン
+- マイページ
+- 大会一覧・大会詳細
+- 大会ごとの募集チーム一覧
+- チーム詳細
+- チーム作成
+- ownerによるチーム編集
+- 自分の所属チーム一覧
+- チームへの参加申請
+- 自分の参加申請一覧
+- ownerによる参加申請一覧・承認・拒否
+
 ## Tech Stack
 
 ### Backend
@@ -58,6 +74,16 @@ FIGHTER HUBでは、大会ごとにチームを作成してメンバーを募集
 - Spring Security
 - Hibernate
 - Jakarta Validation
+
+### Frontend
+
+- Vue 3
+- TypeScript
+- Vite
+- Vue Router
+- Pinia
+- Axios
+- Vitest
 
 ### Database
 
@@ -100,6 +126,27 @@ PostgreSQL
 - **Entity**: データベースのテーブル構造をJavaオブジェクトとして表現
 - **DTO**: APIの入出力モデルとしてEntityとAPIを分離
 - **GlobalExceptionHandler**: APIで発生した例外を共通のエラーレスポンスへ変換
+
+## Frontend Architecture
+
+`frontend/`配下はVue 3 + TypeScriptで構成しています。
+
+- **views**: 画面単位のVueコンポーネント。APIの呼び出しと画面表示を行う
+- **router**: Vue Routerによるルーティング定義。`meta.requiresAuth`で認証が必要なページを制御する
+- **stores**: Piniaによる状態管理。現状は認証状態を扱う`auth` storeのみ
+- **api**: Axiosを使ったバックエンドAPI呼び出し層。エンドポイントごとに薄い関数として実装している
+- **types**: バックエンドの各DTOに対応するTypeScript型定義
+
+## Authentication
+
+BackendはJWT Bearer認証（Spring Security OAuth2 Resource Server, Stateless）でAPIを保護しています。
+
+Frontendでは以下の仕組みで認証状態を扱います。
+
+- JWTをlocalStorageに保存
+- Axios interceptor（`api/client.ts`）でリクエストへ`Authorization: Bearer <token>`を自動付与
+- Pinia auth store（`stores/auth.ts`）で認証状態（token・ログインユーザー情報）を管理
+- Vue Routerの`meta.requiresAuth`で保護ページへのアクセスを制御
 
 ## API Documentation
 
@@ -207,6 +254,18 @@ Windows:
 
 `http://localhost:8080`
 
+## Frontend Setup
+
+backend（Spring Boot）とPostgreSQLが起動済みであることを前提とします。
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+開発時は、Vite dev serverの設定（`frontend/vite.config.ts`）により`/api`宛のリクエストをSpring Boot（`http://localhost:8080`）へproxyしています。
+
 ## Testing
 
 JUnit 5、Mockito、MockMvcを使用して、Service層およびController層のテストを実装しています。
@@ -240,8 +299,20 @@ Windows:
 .\mvnw clean test
 ```
 
+## Frontend Test / Quality Check
+
+`frontend`ディレクトリで以下を実行します。
+
+```bash
+npm run type-check
+npm run lint
+npm run test:unit -- --run
+```
+
 ## Development Status
 
 現在開発中です。
 
 Spring Bootを使用したバックエンドAPIの基盤を構築し、キャラクター情報取得API、ユーザー登録、JWT認証によるログイン、自分のプロフィール取得・更新、チーム作成・編集・メンバー一覧取得・メンバー削除、チームへの参加申請と承認・拒否（承認時のメンバー自動追加、定員チェック、Pessimistic Lockによる同時実行対策を含む）、大会の一覧・詳細取得およびADMINユーザーによる大会作成・更新・論理削除、大会ごとのチーム一覧取得、共通エラーハンドリング、APIドキュメント、テスト環境まで実装しています。
+
+Week 7では、Vue 3 + TypeScriptによるフロントエンドを実装しました。ログイン、マイページ、大会・チームの閲覧、チーム作成・編集、参加申請とownerによる承認・拒否まで、主要なユーザー操作を画面から一通り行える状態になっています。Docker/AWS等でのデプロイはまだ行っていません。

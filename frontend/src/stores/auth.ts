@@ -17,7 +17,14 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = response.accessToken
     localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, response.accessToken)
 
-    user.value = await fetchMe()
+    try {
+      user.value = await fetchMe()
+    } catch (e) {
+      // token取得後のfetchMeが失敗した場合、tokenだけが残る不整合な認証状態に
+      // ならないよう、token/user/localStorageをすべて未ログイン状態へ戻す。
+      logout()
+      throw e
+    }
   }
 
   function logout() {

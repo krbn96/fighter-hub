@@ -102,6 +102,7 @@ async function handleApply() {
       <div v-else-if="authStore.isAuthenticated">
         <div v-if="applicationSubmitted">
           <p>参加申請しました</p>
+          <p><RouterLink to="/applications/my">自分の参加申請を見る</RouterLink></p>
         </div>
         <form v-else @submit.prevent="handleApply">
           <div>
