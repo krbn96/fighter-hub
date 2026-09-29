@@ -44,6 +44,16 @@ onMounted(async () => {
       <p>開始日時: {{ formatDateTime(tournament.startAt) }}</p>
       <p>最大参加人数: {{ tournament.maxPlayers }}</p>
       <p>ステータス: {{ tournament.status }}</p>
+
+      <section>
+        <h2>この大会に参加する</h2>
+        <p>チームを作る・募集する（近日実装予定）</p>
+        <p>
+          <RouterLink :to="`/tournaments/${tournament.id}/teams`"
+            >チームを探す・参加する</RouterLink
+          >
+        </p>
+      </section>
     </div>
 
     <p><RouterLink to="/tournaments">大会一覧へ戻る</RouterLink></p>
