@@ -19,6 +19,7 @@ const authStore = useAuthStore()
         </li>
       </ul>
       <p><RouterLink to="/teams/my">所属チームを見る</RouterLink></p>
+      <p><RouterLink to="/applications/my">自分の参加申請を見る</RouterLink></p>
     </div>
   </main>
 </template>

@@ -75,6 +75,18 @@ const router = createRouter({
       component: () => import('../views/TeamEditView.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/teams/:id/applications',
+      name: 'team-applications',
+      component: () => import('../views/TeamApplicationsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/applications/my',
+      name: 'my-applications',
+      component: () => import('../views/MyApplicationView.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 })
 

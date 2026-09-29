@@ -11,6 +11,12 @@ vi.mock('@/api/teams', () => ({
   fetchTeamById: vi.fn<(id: string) => Promise<Team>>(),
 }))
 
+vi.mock('@/api/applications', () => ({
+  createApplication: vi.fn<
+    (teamId: string, request: { message: string | null }) => Promise<unknown>
+  >(),
+}))
+
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-router')>()
   return {
@@ -20,6 +26,7 @@ vi.mock('vue-router', async (importOriginal) => {
 })
 
 import { fetchTeamById } from '@/api/teams'
+import { createApplication } from '@/api/applications'
 
 const sampleTeam: Team = {
   id: 10,
@@ -55,6 +62,7 @@ describe('TeamDetailView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.mocked(fetchTeamById).mockReset()
+    vi.mocked(createApplication).mockReset()
   })
 
   it('API取得成功時にチーム詳細が表示される', async () => {
@@ -148,5 +156,93 @@ describe('TeamDetailView', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('チームを編集する')
+  })
+
+  it('non-ownerログイン時に参加申請フォームが表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+    authStore.user = createUserMe(sampleTeam.ownerId + 999)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('form').exists()).toBe(true)
+    expect(wrapper.text()).toContain('このチームに参加申請する')
+  })
+
+  it('owner時は参加申請フォームを表示せず、参加申請一覧へのリンクを表示する', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+    authStore.user = createUserMe(sampleTeam.ownerId)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('form').exists()).toBe(false)
+
+    const links = wrapper.findAllComponents(RouterLinkStub)
+    const applicationsLink = links.find((link) => link.text().includes('参加申請を確認する'))
+    expect(applicationsLink).toBeDefined()
+    expect(applicationsLink?.props('to')).toBe(`/teams/${sampleTeam.id}/applications`)
+  })
+
+  it('参加申請成功時に「参加申請しました」と表示されフォームが非表示になる', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+    authStore.user = createUserMe(sampleTeam.ownerId + 999)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(createApplication).mockResolvedValue({
+      id: 1,
+      teamId: sampleTeam.id,
+      userId: 999,
+      userName: 'Test User',
+      message: null,
+      status: 'PENDING',
+      createdAt: '2026-09-01T00:00:00',
+      updatedAt: '2026-09-01T00:00:00',
+    })
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(createApplication).toHaveBeenCalledWith(String(sampleTeam.id), { message: null })
+    expect(wrapper.text()).toContain('参加申請しました')
+    expect(wrapper.find('form').exists()).toBe(false)
+  })
+
+  it('参加申請409時に専用メッセージが表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+    authStore.user = createUserMe(sampleTeam.ownerId + 999)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(createApplication).mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 409 },
+    })
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('この大会では既にチームに所属しているか、申請中です')
   })
 })
