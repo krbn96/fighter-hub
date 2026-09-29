@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 // Day 2は認証確認用の最小画面。プロフィール編集機能はまだ実装しない。
@@ -17,6 +18,7 @@ const authStore = useAuthStore()
           キャラクターID: {{ character.characterId }} / ランク: {{ character.rank }}
         </li>
       </ul>
+      <p><RouterLink to="/teams/my">所属チームを見る</RouterLink></p>
     </div>
   </main>
 </template>

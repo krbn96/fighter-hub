@@ -47,7 +47,11 @@ onMounted(async () => {
 
       <section>
         <h2>この大会に参加する</h2>
-        <p>チームを作る・募集する（近日実装予定）</p>
+        <p>
+          <RouterLink :to="`/tournaments/${tournament.id}/teams/create`"
+            >チームを作る・募集する</RouterLink
+          >
+        </p>
         <p>
           <RouterLink :to="`/tournaments/${tournament.id}/teams`"
             >チームを探す・参加する</RouterLink

@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 
 import TeamDetailView from '../TeamDetailView.vue'
+import { useAuthStore } from '@/stores/auth'
 import type { Team } from '@/types/team'
+import type { UserMe } from '@/types/user'
 
 vi.mock('@/api/teams', () => ({
   fetchTeamById: vi.fn<(id: string) => Promise<Team>>(),
@@ -32,8 +35,25 @@ const sampleTeam: Team = {
   updatedAt: '2026-09-01T00:00:00',
 }
 
+function createUserMe(id: number): UserMe {
+  return {
+    id,
+    name: 'Test User',
+    characters: [],
+    playTimeStart: null,
+    playTimeEnd: null,
+    message: null,
+    email: 'test@example.com',
+    xId: null,
+    discordId: null,
+    createdAt: '2026-09-01T00:00:00',
+    updatedAt: '2026-09-01T00:00:00',
+  }
+}
+
 describe('TeamDetailView', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.mocked(fetchTeamById).mockReset()
   })
 
@@ -96,5 +116,37 @@ describe('TeamDetailView', () => {
 
     expect(wrapper.text()).toContain('チーム情報の取得に失敗しました')
     expect(wrapper.text()).not.toContain('指定したチームが見つかりません')
+  })
+
+  it('ownerの場合「チームを編集する」リンクが表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.user = createUserMe(sampleTeam.ownerId)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    const links = wrapper.findAllComponents(RouterLinkStub)
+    const editLink = links.find((link) => link.text().includes('チームを編集する'))
+
+    expect(editLink).toBeDefined()
+    expect(editLink?.props('to')).toBe(`/teams/${sampleTeam.id}/edit`)
+  })
+
+  it('non-ownerの場合「チームを編集する」リンクが表示されない', async () => {
+    const authStore = useAuthStore()
+    authStore.user = createUserMe(sampleTeam.ownerId + 999)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('チームを編集する')
   })
 })

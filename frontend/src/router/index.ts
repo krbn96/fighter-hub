@@ -51,9 +51,29 @@ const router = createRouter({
       component: () => import('../views/TournamentTeamsView.vue'),
     },
     {
+      path: '/tournaments/:id/teams/create',
+      name: 'team-create',
+      component: () => import('../views/TeamCreateView.vue'),
+      meta: { requiresAuth: true },
+    },
+    // 静的パスの/teams/myは、動的セグメントの/teams/:idより先に定義し、
+    // :idとして誤認されないことを分かりやすくする。
+    {
+      path: '/teams/my',
+      name: 'my-teams',
+      component: () => import('../views/MyTeamView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/teams/:id',
       name: 'team-detail',
       component: () => import('../views/TeamDetailView.vue'),
+    },
+    {
+      path: '/teams/:id/edit',
+      name: 'team-edit',
+      component: () => import('../views/TeamEditView.vue'),
+      meta: { requiresAuth: true },
     },
   ],
 })

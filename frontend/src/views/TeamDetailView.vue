@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import axios from 'axios'
 import { fetchTeamById } from '@/api/teams'
+import { useAuthStore } from '@/stores/auth'
 import type { Team } from '@/types/team'
 
 const route = useRoute()
+const authStore = useAuthStore()
 
 const team = ref<Team | null>(null)
 const loading = ref(false)
 const error = ref('')
 const notFound = ref(false)
+
+// フロント側のowner判定はUI制御のみ。実際の認可はPATCH /api/teams/{id}側で行われる。
+const isOwner = computed(() => team.value !== null && team.value.ownerId === authStore.user?.id)
 
 onMounted(async () => {
   loading.value = true
@@ -51,6 +56,10 @@ onMounted(async () => {
         }}
       </p>
       <p>募集メッセージ: {{ team.recruitmentMessage ?? '指定なし' }}</p>
+
+      <p v-if="isOwner">
+        <RouterLink :to="`/teams/${team.id}/edit`">チームを編集する</RouterLink>
+      </p>
 
       <p><RouterLink :to="`/tournaments/${team.tournamentId}`">大会詳細へ戻る</RouterLink></p>
     </div>
