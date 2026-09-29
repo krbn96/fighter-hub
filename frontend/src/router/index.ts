@@ -35,6 +35,16 @@ const router = createRouter({
       component: () => import('../views/MyPageView.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/tournaments',
+      name: 'tournaments',
+      component: () => import('../views/TournamentListView.vue'),
+    },
+    {
+      path: '/tournaments/:id',
+      name: 'tournament-detail',
+      component: () => import('../views/TournamentDetailView.vue'),
+    },
   ],
 })
 
