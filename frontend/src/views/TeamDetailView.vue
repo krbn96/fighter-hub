@@ -139,7 +139,9 @@ async function handleApply() {
               :key="member.userId"
               class="team-detail-view__member"
             >
-              <span class="team-detail-view__member-name">{{ member.userName }}</span>
+              <RouterLink :to="`/users/${member.userId}`" class="team-detail-view__member-name">{{
+                member.userName
+              }}</RouterLink>
               <span
                 class="team-detail-view__member-role"
                 :class="`team-detail-view__member-role--${memberRole(member).toLowerCase()}`"
@@ -259,6 +261,18 @@ async function handleApply() {
 
 .team-detail-view__member + .team-detail-view__member {
   border-top: 1px solid var(--color-border);
+}
+
+.team-detail-view__member-name {
+  color: var(--color-text);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.team-detail-view__member-name:hover,
+.team-detail-view__member-name:focus-visible {
+  color: var(--color-primary);
+  text-decoration: underline;
 }
 
 .team-detail-view__member-role {

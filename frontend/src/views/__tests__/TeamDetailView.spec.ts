@@ -278,6 +278,26 @@ describe('TeamDetailView', () => {
     expect(memberItem?.text()).not.toContain('OWNER')
   })
 
+  it('member userNameが/users/{userId}へのリンクになる', async () => {
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTeamMembers).mockResolvedValue([
+      { userId: sampleTeam.ownerId, userName: sampleTeam.ownerName, joinedAt: '2026-09-01T00:00:00' },
+      { userId: 999, userName: 'Player B', joinedAt: '2026-09-02T00:00:00' },
+    ])
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    const links = wrapper.findAllComponents(RouterLinkStub)
+    const ownerLink = links.find((link) => link.text() === sampleTeam.ownerName)
+    const memberLink = links.find((link) => link.text() === 'Player B')
+
+    expect(ownerLink?.props('to')).toBe(`/users/${sampleTeam.ownerId}`)
+    expect(memberLink?.props('to')).toBe('/users/999')
+  })
+
   it('membersが0件でもレイアウトが崩れずfallback文言が表示される', async () => {
     vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
     vi.mocked(fetchTeamMembers).mockResolvedValue([])
