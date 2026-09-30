@@ -55,14 +55,15 @@ const classes = computed(() => ['base-button', `base-button--${props.variant}`])
 }
 
 .base-button--primary {
-  background: var(--color-primary);
+  background: transparent;
   border-color: var(--color-primary);
-  color: var(--color-text);
+  color: var(--color-primary);
 }
 
 .base-button--primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
 }
 
 .base-button--secondary {

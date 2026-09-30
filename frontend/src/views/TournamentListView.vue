@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 import { fetchTournaments } from '@/api/tournaments'
-import { formatDateTime } from '@/utils/formatDateTime'
+import TournamentCard from '@/components/tournament/TournamentCard.vue'
+import LoadingState from '@/components/ui/LoadingState.vue'
+import ErrorState from '@/components/ui/ErrorState.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 import type { Tournament } from '@/types/tournament'
 
 const tournaments = ref<Tournament[]>([])
 const loading = ref(false)
 const error = ref('')
 
-onMounted(async () => {
+async function loadTournaments() {
   loading.value = true
   error.value = ''
 
@@ -21,22 +23,63 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadTournaments)
 </script>
 
 <template>
-  <main>
-    <h1>大会一覧</h1>
+  <main class="tournament-list-view">
+    <div class="container">
+      <header class="tournament-list-view__header">
+        <h1>Tournaments</h1>
+        <p>参加する大会を選んで、チームを作る・探す。</p>
+      </header>
 
-    <p v-if="loading">Loading...</p>
-    <p v-else-if="error" role="alert">{{ error }}</p>
-    <p v-else-if="tournaments.length === 0">大会がありません</p>
-    <ul v-else>
-      <li v-for="tournament in tournaments" :key="tournament.id">
-        <RouterLink :to="`/tournaments/${tournament.id}`">{{ tournament.name }}</RouterLink>
-        <span> / {{ formatDateTime(tournament.startAt) }}</span>
-        <span> / {{ tournament.status }}</span>
-      </li>
-    </ul>
+      <LoadingState v-if="loading" />
+      <ErrorState v-else-if="error" :message="error" retryable @retry="loadTournaments" />
+      <EmptyState v-else-if="tournaments.length === 0" message="大会がありません" />
+      <div v-else class="tournament-list-view__grid">
+        <TournamentCard
+          v-for="tournament in tournaments"
+          :key="tournament.id"
+          :tournament="tournament"
+        />
+      </div>
+    </div>
   </main>
 </template>
+
+<style scoped>
+.tournament-list-view {
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-12);
+}
+
+.tournament-list-view__header {
+  margin-bottom: var(--space-6);
+}
+
+.tournament-list-view__header p {
+  color: var(--color-text-secondary);
+  margin-top: var(--space-2);
+}
+
+.tournament-list-view__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+@media (min-width: 768px) {
+  .tournament-list-view__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .tournament-list-view__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+</style>

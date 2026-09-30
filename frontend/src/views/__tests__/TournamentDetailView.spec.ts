@@ -74,7 +74,7 @@ describe('TournamentDetailView', () => {
     expect(wrapper.text()).not.toContain('指定した大会が見つかりません')
   })
 
-  it('「チームを探す・参加する」が/tournaments/{id}/teamsへ、「チームを作る・募集する」が/tournaments/{id}/teams/createへのリンクになっている', async () => {
+  it('「FIND A TEAM」が/tournaments/{id}/teamsへ、「CREATE TEAM」が/tournaments/{id}/teams/createへのリンクになっている', async () => {
     vi.mocked(fetchTournamentById).mockResolvedValue(sampleTournament)
 
     const wrapper = mount(TournamentDetailView, {
@@ -83,8 +83,8 @@ describe('TournamentDetailView', () => {
     await flushPromises()
 
     const links = wrapper.findAllComponents(RouterLinkStub)
-    const searchTeamsLink = links.find((link) => link.text().includes('チームを探す・参加する'))
-    const createTeamLink = links.find((link) => link.text().includes('チームを作る・募集する'))
+    const searchTeamsLink = links.find((link) => link.text().includes('FIND A TEAM'))
+    const createTeamLink = links.find((link) => link.text().includes('CREATE TEAM'))
 
     expect(searchTeamsLink).toBeDefined()
     expect(searchTeamsLink?.props('to')).toBe('/tournaments/1/teams')
