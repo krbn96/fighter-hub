@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 import { fetchMyTeams } from '@/api/teams'
 import { useAuthStore } from '@/stores/auth'
+import TeamCard from '@/components/team/TeamCard.vue'
+import LoadingState from '@/components/ui/LoadingState.vue'
+import ErrorState from '@/components/ui/ErrorState.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 import type { Team } from '@/types/team'
 
 const authStore = useAuthStore()
@@ -11,7 +14,7 @@ const teams = ref<Team[]>([])
 const loading = ref(false)
 const error = ref('')
 
-onMounted(async () => {
+async function loadTeams() {
   loading.value = true
   error.value = ''
 
@@ -23,27 +26,62 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
 
-function roleLabel(team: Team): string {
-  return team.ownerId === authStore.user?.id ? 'owner' : 'member'
+onMounted(loadTeams)
+
+function roleLabel(team: Team): 'OWNER' | 'MEMBER' {
+  return team.ownerId === authStore.user?.id ? 'OWNER' : 'MEMBER'
 }
 </script>
 
 <template>
-  <main>
-    <h1>所属チーム一覧</h1>
+  <main class="my-team-view">
+    <div class="container">
+      <header class="my-team-view__header">
+        <h1>所属チーム一覧</h1>
+      </header>
 
-    <p v-if="loading">Loading...</p>
-    <p v-else-if="error" role="alert">{{ error }}</p>
-    <p v-else-if="teams.length === 0">所属しているチームはありません</p>
-    <ul v-else>
-      <li v-for="team in teams" :key="team.id">
-        <RouterLink :to="`/teams/${team.id}`">{{ team.name }}</RouterLink>
-        <span> / 大会: {{ team.tournamentName }}</span>
-        <span> / owner: {{ team.ownerName }}</span>
-        <span> / 自分の立場: {{ roleLabel(team) }}</span>
-      </li>
-    </ul>
+      <LoadingState v-if="loading" />
+      <ErrorState v-else-if="error" :message="error" retryable @retry="loadTeams" />
+      <EmptyState v-else-if="teams.length === 0" message="所属しているチームはありません" />
+      <div v-else class="my-team-view__grid">
+        <TeamCard
+          v-for="team in teams"
+          :key="team.id"
+          :team="team"
+          :role-label="roleLabel(team)"
+        />
+      </div>
+    </div>
   </main>
 </template>
+
+<style scoped>
+.my-team-view {
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-12);
+}
+
+.my-team-view__header {
+  margin-bottom: var(--space-6);
+}
+
+.my-team-view__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+@media (min-width: 768px) {
+  .my-team-view__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .my-team-view__grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+</style>

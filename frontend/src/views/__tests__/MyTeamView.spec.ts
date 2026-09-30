@@ -76,8 +76,8 @@ describe('MyTeamView', () => {
     const text = wrapper.text()
     expect(text).toContain('Team Ryu')
     expect(text).toContain('Team Ken')
-    expect(text).toContain('owner')
-    expect(text).toContain('member')
+    expect(text).toContain('OWNER')
+    expect(text).toContain('MEMBER')
   })
 
   it('0件時に「所属しているチームはありません」が表示される', async () => {

@@ -1,5 +1,11 @@
 import { apiClient } from './client'
-import type { Team, TeamCreateRequest, TeamCreateResponse, TeamUpdateRequest } from '@/types/team'
+import type {
+  Team,
+  TeamCreateRequest,
+  TeamCreateResponse,
+  TeamMember,
+  TeamUpdateRequest,
+} from '@/types/team'
 
 // Axios呼び出しのみを担当する(api/tournaments.ts等と同じ形式)。
 // localStorage/Bearer Tokenの扱いはapi/client.tsのrequest interceptorに任せる。
@@ -32,5 +38,11 @@ export async function updateTeam(id: string, request: TeamUpdateRequest): Promis
 // GET /api/teams/my
 export async function fetchMyTeams(): Promise<Team[]> {
   const response = await apiClient.get<Team[]>('/teams/my')
+  return response.data
+}
+
+// GET /api/teams/{id}/members
+export async function fetchTeamMembers(teamId: string): Promise<TeamMember[]> {
+  const response = await apiClient.get<TeamMember[]>(`/teams/${teamId}/members`)
   return response.data
 }

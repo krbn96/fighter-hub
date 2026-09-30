@@ -49,7 +49,7 @@ describe('TournamentTeamsView', () => {
     expect(fetchTeamsByTournament).toHaveBeenCalledWith('1')
   })
 
-  it('0件時に募集中のチームがありませんと表示される', async () => {
+  it('0件時にこの大会にはまだチームがありませんと表示される', async () => {
     vi.mocked(fetchTeamsByTournament).mockResolvedValue([])
 
     const wrapper = mount(TournamentTeamsView, {
@@ -57,7 +57,7 @@ describe('TournamentTeamsView', () => {
     })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('募集中のチームがありません')
+    expect(wrapper.text()).toContain('この大会にはまだチームがありません')
   })
 
   it('大会不存在の404時に専用メッセージが表示される', async () => {

@@ -44,3 +44,11 @@ export interface TeamUpdateRequest {
   characterRequirements?: number[] | null
   recruitmentMessage?: string | null
 }
+
+// バックエンドの TeamMemberResponse に対応する型。
+// role/statusはbackend側に存在しないため含まない(owner判定はteam.ownerIdとの比較で行う)。
+export interface TeamMember {
+  userId: number
+  userName: string
+  joinedAt: string
+}

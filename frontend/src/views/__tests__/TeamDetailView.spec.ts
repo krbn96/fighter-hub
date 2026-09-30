@@ -4,11 +4,12 @@ import { createPinia, setActivePinia } from 'pinia'
 
 import TeamDetailView from '../TeamDetailView.vue'
 import { useAuthStore } from '@/stores/auth'
-import type { Team } from '@/types/team'
+import type { Team, TeamMember } from '@/types/team'
 import type { UserMe } from '@/types/user'
 
 vi.mock('@/api/teams', () => ({
   fetchTeamById: vi.fn<(id: string) => Promise<Team>>(),
+  fetchTeamMembers: vi.fn<(teamId: string) => Promise<TeamMember[]>>(),
 }))
 
 vi.mock('@/api/applications', () => ({
@@ -25,7 +26,7 @@ vi.mock('vue-router', async (importOriginal) => {
   }
 })
 
-import { fetchTeamById } from '@/api/teams'
+import { fetchTeamById, fetchTeamMembers } from '@/api/teams'
 import { createApplication } from '@/api/applications'
 
 const sampleTeam: Team = {
@@ -41,6 +42,10 @@ const sampleTeam: Team = {
   createdAt: '2026-09-01T00:00:00',
   updatedAt: '2026-09-01T00:00:00',
 }
+
+const defaultMembers: TeamMember[] = [
+  { userId: sampleTeam.ownerId, userName: sampleTeam.ownerName, joinedAt: '2026-09-01T00:00:00' },
+]
 
 function createUserMe(id: number): UserMe {
   return {
@@ -63,6 +68,9 @@ describe('TeamDetailView', () => {
     setActivePinia(createPinia())
     vi.mocked(fetchTeamById).mockReset()
     vi.mocked(createApplication).mockReset()
+    vi.mocked(fetchTeamMembers).mockReset()
+    // 既存テストが個別にmembersを設定していないケースのdefault(owner 1人所属)
+    vi.mocked(fetchTeamMembers).mockResolvedValue(defaultMembers)
   })
 
   it('API取得成功時にチーム詳細が表示される', async () => {
@@ -227,6 +235,60 @@ describe('TeamDetailView', () => {
     const myApplicationsLink = links.find((link) => link.text().includes('自分の参加申請を見る'))
     expect(myApplicationsLink).toBeDefined()
     expect(myApplicationsLink?.props('to')).toBe('/applications/my')
+  })
+
+  it('未ログイン時にログイン案内とLOGINボタンが表示される', async () => {
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('参加申請するにはログインしてください')
+    expect(wrapper.find('form').exists()).toBe(false)
+
+    const links = wrapper.findAllComponents(RouterLinkStub)
+    const loginLink = links.find((link) => link.text().includes('LOGIN'))
+    expect(loginLink).toBeDefined()
+    expect(loginLink?.props('to')).toBe('/login')
+  })
+
+  it('Membersセクションにmembers.lengthとOWNER/MEMBER判定が反映される', async () => {
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTeamMembers).mockResolvedValue([
+      { userId: sampleTeam.ownerId, userName: sampleTeam.ownerName, joinedAt: '2026-09-01T00:00:00' },
+      { userId: 999, userName: 'Player B', joinedAt: '2026-09-02T00:00:00' },
+    ])
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(fetchTeamMembers).toHaveBeenCalledWith('10')
+    expect(wrapper.text()).toContain('MEMBERS (2)')
+
+    const items = wrapper.findAll('.team-detail-view__member')
+    const ownerItem = items.find((item) => item.text().includes(sampleTeam.ownerName))
+    const memberItem = items.find((item) => item.text().includes('Player B'))
+
+    expect(ownerItem?.text()).toContain('OWNER')
+    expect(memberItem?.text()).toContain('MEMBER')
+    expect(memberItem?.text()).not.toContain('OWNER')
+  })
+
+  it('membersが0件でもレイアウトが崩れずfallback文言が表示される', async () => {
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTeamMembers).mockResolvedValue([])
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('MEMBERS (0)')
+    expect(wrapper.text()).toContain('メンバー情報がありません')
   })
 
   it('参加申請409時に専用メッセージが表示される', async () => {
