@@ -63,7 +63,7 @@ describe('MyApplicationView', () => {
     expect(fetchTeamById).toHaveBeenCalledTimes(1)
   })
 
-  it('0件時に「参加申請はありません」が表示される', async () => {
+  it('0件時にEmptyStateで「参加申請はありません」が表示される', async () => {
     vi.mocked(fetchMyApplications).mockResolvedValue([])
 
     const wrapper = mount(MyApplicationView, {
@@ -73,5 +73,64 @@ describe('MyApplicationView', () => {
 
     expect(wrapper.text()).toContain('参加申請はありません')
     expect(fetchTeamById).not.toHaveBeenCalled()
+  })
+
+  it('PENDING/APPROVED/REJECTEDそれぞれStatusBadgeで表示される', async () => {
+    vi.mocked(fetchMyApplications).mockResolvedValue([
+      { ...sampleApplication, id: 1, teamId: 10, status: 'PENDING' },
+      { ...sampleApplication, id: 2, teamId: 11, status: 'APPROVED' },
+      { ...sampleApplication, id: 3, teamId: 12, status: 'REJECTED' },
+    ])
+    vi.mocked(fetchTeamById).mockImplementation((id) =>
+      Promise.resolve({ ...sampleTeam, id: Number(id) }),
+    )
+
+    const wrapper = mount(MyApplicationView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    const badges = wrapper.findAll('.status-badge')
+    expect(badges).toHaveLength(3)
+    expect(wrapper.text()).toContain('PENDING')
+    expect(wrapper.text()).toContain('APPROVED')
+    expect(wrapper.text()).toContain('REJECTED')
+  })
+
+  it('fetchMyApplications失敗時にエラーが表示される', async () => {
+    vi.mocked(fetchMyApplications).mockRejectedValue(new Error('network error'))
+
+    const wrapper = mount(MyApplicationView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('参加申請の取得に失敗しました')
+  })
+
+  it('Team個別取得が失敗した場合もfallback表示で他の申請表示は継続される', async () => {
+    vi.mocked(fetchMyApplications).mockResolvedValue([sampleApplication])
+    vi.mocked(fetchTeamById).mockRejectedValue(new Error('network error'))
+
+    const wrapper = mount(MyApplicationView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(`Team #${sampleApplication.teamId}`)
+    expect(wrapper.text()).toContain('PENDING')
+  })
+
+  it('Team Detailへのリンクが/teams/{teamId}になる', async () => {
+    vi.mocked(fetchMyApplications).mockResolvedValue([sampleApplication])
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+
+    const wrapper = mount(MyApplicationView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    const link = wrapper.findComponent(RouterLinkStub)
+    expect(link.props('to')).toBe(`/teams/${sampleApplication.teamId}`)
   })
 })

@@ -5,6 +5,13 @@ import axios from 'axios'
 import { fetchTeamById } from '@/api/teams'
 import { approveApplication, fetchTeamApplications, rejectApplication } from '@/api/applications'
 import { useAuthStore } from '@/stores/auth'
+import BaseCard from '@/components/ui/BaseCard.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
+import LoadingState from '@/components/ui/LoadingState.vue'
+import ErrorState from '@/components/ui/ErrorState.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import { formatDateTime } from '@/utils/formatDateTime'
 import type { RecruitmentApplication } from '@/types/recruitmentApplication'
 import type { Team } from '@/types/team'
 
@@ -26,7 +33,7 @@ const actionError = ref('')
 
 const isOwner = computed(() => team.value !== null && team.value.ownerId === authStore.user?.id)
 
-onMounted(async () => {
+async function loadApplications() {
   loading.value = true
   loadError.value = ''
   notFound.value = false
@@ -50,7 +57,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadApplications)
 
 function actionErrorMessage(e: unknown): string {
   if (axios.isAxiosError(e) && e.response?.status === 403) {
@@ -71,7 +80,7 @@ async function handleApprove(applicationId: number) {
 
   try {
     await approveApplication(teamId, applicationId)
-    // 最新のstatusを反映するため一覧を再取得する。
+    // 最新のstatusを反映するため一覧を再取得する(楽観的更新はしない)。
     applications.value = await fetchTeamApplications(teamId)
   } catch (e) {
     actionError.value = actionErrorMessage(e)
@@ -96,45 +105,125 @@ async function handleReject(applicationId: number) {
 </script>
 
 <template>
-  <main>
-    <p v-if="loading">Loading...</p>
-    <p v-else-if="notFound" role="alert">指定したチームが見つかりません</p>
-    <p v-else-if="forbidden" role="alert">このチームの参加申請を確認する権限がありません</p>
-    <p v-else-if="loadError" role="alert">{{ loadError }}</p>
-    <template v-else-if="team">
-      <div v-if="!isOwner">
-        <p role="alert">このチームの参加申請を確認する権限がありません</p>
-      </div>
-      <div v-else>
-        <h1>{{ team.name }} の参加申請一覧</h1>
+  <main class="team-applications-view">
+    <div class="container">
+      <LoadingState v-if="loading" />
+      <ErrorState v-else-if="notFound" message="指定したチームが見つかりません" />
+      <ErrorState
+        v-else-if="forbidden"
+        message="このチームの参加申請を確認する権限がありません"
+      />
+      <ErrorState v-else-if="loadError" :message="loadError" retryable @retry="loadApplications" />
 
-        <p v-if="actionError" role="alert">{{ actionError }}</p>
+      <template v-else-if="team">
+        <ErrorState v-if="!isOwner" message="このチームの参加申請を確認する権限がありません" />
+        <template v-else>
+          <header class="team-applications-view__header">
+            <h1>{{ team.name }} の参加申請一覧</h1>
+          </header>
 
-        <p v-if="applications.length === 0">参加申請はありません</p>
-        <ul v-else>
-          <li v-for="application in applications" :key="application.id">
-            <span>{{ application.userName }}</span>
-            <span> / メッセージ: {{ application.message ?? '(なし)' }}</span>
-            <span> / status: {{ application.status }}</span>
-            <template v-if="application.status === 'PENDING'">
-              <button
-                type="button"
-                :disabled="processingId === application.id"
-                @click="handleApprove(application.id)"
-              >
-                承認
-              </button>
-              <button
-                type="button"
-                :disabled="processingId === application.id"
-                @click="handleReject(application.id)"
-              >
-                拒否
-              </button>
-            </template>
-          </li>
-        </ul>
-      </div>
-    </template>
+          <p v-if="actionError" class="team-applications-view__action-error" role="alert">
+            {{ actionError }}
+          </p>
+
+          <EmptyState v-if="applications.length === 0" message="参加申請はありません" />
+          <div v-else class="team-applications-view__list">
+            <BaseCard
+              v-for="application in applications"
+              :key="application.id"
+              class="team-applications-view__item"
+            >
+              <div class="team-applications-view__item-header">
+                <span class="team-applications-view__applicant">{{ application.userName }}</span>
+                <StatusBadge :status="application.status" />
+              </div>
+              <p class="team-applications-view__message">
+                {{ application.message ?? '(メッセージなし)' }}
+              </p>
+              <p class="team-applications-view__date">
+                申請日時: {{ formatDateTime(application.createdAt) }}
+              </p>
+              <div v-if="application.status === 'PENDING'" class="team-applications-view__actions">
+                <BaseButton
+                  type="button"
+                  :disabled="processingId === application.id"
+                  @click="handleApprove(application.id)"
+                >
+                  APPROVE
+                </BaseButton>
+                <BaseButton
+                  type="button"
+                  variant="secondary"
+                  :disabled="processingId === application.id"
+                  @click="handleReject(application.id)"
+                >
+                  REJECT
+                </BaseButton>
+              </div>
+            </BaseCard>
+          </div>
+        </template>
+      </template>
+    </div>
   </main>
 </template>
+
+<style scoped>
+.team-applications-view {
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-12);
+}
+
+.team-applications-view__header {
+  margin-bottom: var(--space-6);
+}
+
+.team-applications-view__action-error {
+  margin: 0 0 var(--space-4);
+  color: var(--color-error);
+  font-size: 0.85rem;
+}
+
+.team-applications-view__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.team-applications-view__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.team-applications-view__item-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.team-applications-view__applicant {
+  font-weight: 700;
+}
+
+.team-applications-view__message {
+  margin: 0;
+  color: var(--color-text);
+  white-space: pre-wrap;
+}
+
+.team-applications-view__date {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+}
+
+.team-applications-view__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+</style>

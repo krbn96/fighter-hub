@@ -31,7 +31,7 @@ vi.mock('vue-router', async (importOriginal) => {
 })
 
 import { fetchTeamById } from '@/api/teams'
-import { fetchTeamApplications, approveApplication } from '@/api/applications'
+import { fetchTeamApplications, approveApplication, rejectApplication } from '@/api/applications'
 
 const sampleTeam: Team = {
   id: 10,
@@ -91,6 +91,7 @@ describe('TeamApplicationsView', () => {
     vi.mocked(fetchTeamById).mockReset()
     vi.mocked(fetchTeamApplications).mockReset()
     vi.mocked(approveApplication).mockReset()
+    vi.mocked(rejectApplication).mockReset()
   })
 
   it('ownerで応募一覧が表示され、PENDINGのみ承認/拒否ボタンが表示される', async () => {
@@ -131,6 +132,124 @@ describe('TeamApplicationsView', () => {
     expect(fetchTeamApplications).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).toContain('APPROVED')
     expect(wrapper.findAll('button').length).toBe(0)
+  })
+
+  it('APPROVED/REJECTEDにはAPPROVE/REJECTボタンが表示されずStatusBadgeで表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.user = createUserMe(sampleTeam.ownerId)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTeamApplications).mockResolvedValue([approvedApplication])
+
+    const wrapper = mount(TeamApplicationsView)
+    await flushPromises()
+
+    expect(wrapper.findAll('button').length).toBe(0)
+    expect(wrapper.find('.status-badge').exists()).toBe(true)
+    expect(wrapper.text()).toContain('APPROVED')
+  })
+
+  it('reject成功後、一覧が再取得され最新statusが表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.user = createUserMe(sampleTeam.ownerId)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTeamApplications)
+      .mockResolvedValueOnce([pendingApplication])
+      .mockResolvedValueOnce([{ ...pendingApplication, status: 'REJECTED' }])
+    vi.mocked(rejectApplication).mockResolvedValue({ ...pendingApplication, status: 'REJECTED' })
+
+    const wrapper = mount(TeamApplicationsView)
+    await flushPromises()
+
+    const rejectButton = wrapper.findAll('button')[1]
+    await rejectButton?.trigger('click')
+    await flushPromises()
+
+    expect(rejectApplication).toHaveBeenCalledWith('10', pendingApplication.id)
+    expect(fetchTeamApplications).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('REJECTED')
+    expect(wrapper.findAll('button').length).toBe(0)
+  })
+
+  it('0件時にEmptyStateで「参加申請はありません」が表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.user = createUserMe(sampleTeam.ownerId)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTeamApplications).mockResolvedValue([])
+
+    const wrapper = mount(TeamApplicationsView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('参加申請はありません')
+  })
+
+  it('approve処理中は対象ボタンがdisabledになり二重操作を防止する', async () => {
+    const authStore = useAuthStore()
+    authStore.user = createUserMe(sampleTeam.ownerId)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTeamApplications).mockResolvedValue([pendingApplication])
+
+    let resolveApprove: (() => void) | undefined
+    vi.mocked(approveApplication).mockReturnValue(
+      new Promise((resolve) => {
+        resolveApprove = () => resolve({ ...pendingApplication, status: 'APPROVED' })
+      }),
+    )
+
+    const wrapper = mount(TeamApplicationsView)
+    await flushPromises()
+
+    const [approveButton, rejectButton] = wrapper.findAll('button')
+    await approveButton!.trigger('click')
+
+    expect((approveButton!.element as HTMLButtonElement).disabled).toBe(true)
+    expect((rejectButton!.element as HTMLButtonElement).disabled).toBe(true)
+
+    resolveApprove?.()
+    await flushPromises()
+  })
+
+  it('action処理で404が発生した場合、専用メッセージが表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.user = createUserMe(sampleTeam.ownerId)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTeamApplications).mockResolvedValue([pendingApplication])
+    vi.mocked(approveApplication).mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 404 },
+    })
+
+    const wrapper = mount(TeamApplicationsView)
+    await flushPromises()
+
+    await wrapper.findAll('button')[0]?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('指定したチームまたは参加申請が見つかりません')
+  })
+
+  it('action処理で409が発生した場合、専用メッセージが表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.user = createUserMe(sampleTeam.ownerId)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTeamApplications).mockResolvedValue([pendingApplication])
+    vi.mocked(approveApplication).mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 409 },
+    })
+
+    const wrapper = mount(TeamApplicationsView)
+    await flushPromises()
+
+    await wrapper.findAll('button')[0]?.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('この申請は既に処理済みか、承認できない状態です')
   })
 
   it('non-ownerの場合「このチームの参加申請を確認する権限がありません」が表示される', async () => {

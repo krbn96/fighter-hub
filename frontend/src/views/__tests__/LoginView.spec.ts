@@ -66,6 +66,29 @@ describe('LoginView', () => {
     expect(push).toHaveBeenCalledWith('/mypage')
   })
 
+  it('送信中はボタンがdisabledになりLOGGING IN...を表示する', async () => {
+    let resolveLogin: (() => void) | undefined
+    vi.mocked(loginRequest).mockReturnValue(
+      new Promise((resolve) => {
+        resolveLogin = () => resolve({ accessToken: 'token-123' })
+      }),
+    )
+    vi.mocked(fetchMe).mockResolvedValue(dummyUser)
+
+    const wrapper = mount(LoginView)
+
+    await wrapper.find('#email').setValue('test@example.com')
+    await wrapper.find('#password').setValue('password123')
+    await wrapper.find('form').trigger('submit')
+
+    const button = wrapper.find('button[type="submit"]')
+    expect(button.text()).toBe('LOGGING IN...')
+    expect((button.element as HTMLButtonElement).disabled).toBe(true)
+
+    resolveLogin?.()
+    await flushPromises()
+  })
+
   it('ログイン失敗時に既存のエラーメッセージが表示され、/mypageへ遷移しない', async () => {
     vi.mocked(loginRequest).mockRejectedValue(new Error('Invalid email or password.'))
 

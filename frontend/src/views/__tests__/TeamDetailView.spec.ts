@@ -6,11 +6,13 @@ import TeamDetailView from '../TeamDetailView.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { Team, TeamMember } from '@/types/team'
 import type { Character } from '@/types/character'
+import type { RecruitmentApplication } from '@/types/recruitmentApplication'
 import type { UserMe } from '@/types/user'
 
 vi.mock('@/api/teams', () => ({
   fetchTeamById: vi.fn<(id: string) => Promise<Team>>(),
   fetchTeamMembers: vi.fn<(teamId: string) => Promise<TeamMember[]>>(),
+  fetchMyTeams: vi.fn<() => Promise<Team[]>>(),
 }))
 
 vi.mock('@/api/characters', () => ({
@@ -21,6 +23,7 @@ vi.mock('@/api/applications', () => ({
   createApplication: vi.fn<
     (teamId: string, request: { message: string | null }) => Promise<unknown>
   >(),
+  fetchMyApplications: vi.fn<() => Promise<RecruitmentApplication[]>>(),
 }))
 
 vi.mock('vue-router', async (importOriginal) => {
@@ -31,9 +34,9 @@ vi.mock('vue-router', async (importOriginal) => {
   }
 })
 
-import { fetchTeamById, fetchTeamMembers } from '@/api/teams'
+import { fetchMyTeams, fetchTeamById, fetchTeamMembers } from '@/api/teams'
 import { fetchCharacters } from '@/api/characters'
-import { createApplication } from '@/api/applications'
+import { createApplication, fetchMyApplications } from '@/api/applications'
 
 const sampleTeam: Team = {
   id: 10,
@@ -84,6 +87,10 @@ describe('TeamDetailView', () => {
     vi.mocked(fetchTeamMembers).mockResolvedValue(defaultMembers)
     vi.mocked(fetchCharacters).mockReset()
     vi.mocked(fetchCharacters).mockResolvedValue(sampleCharacters)
+    vi.mocked(fetchMyTeams).mockReset()
+    vi.mocked(fetchMyTeams).mockResolvedValue([])
+    vi.mocked(fetchMyApplications).mockReset()
+    vi.mocked(fetchMyApplications).mockResolvedValue([])
   })
 
   it('API取得成功時にチーム詳細が表示される(募集キャラクターはCharacter Nameで表示される)', async () => {
@@ -221,6 +228,94 @@ describe('TeamDetailView', () => {
     })
     await flushPromises()
 
+    expect(wrapper.find('form').exists()).toBe(true)
+    expect(wrapper.text()).toContain('このチームに参加申請する')
+  })
+
+  it('既にこのTeamのmemberの場合、応募フォームの代わりに状態説明が表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+    const applicantId = sampleTeam.ownerId + 999
+    authStore.user = createUserMe(applicantId)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTeamMembers).mockResolvedValue([
+      ...defaultMembers,
+      { userId: applicantId, userName: 'Applicant', joinedAt: '2026-09-02T00:00:00' },
+    ])
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.text()).toContain('このチームのメンバーです')
+  })
+
+  it('同一Tournamentの別Teamに所属済みの場合、応募フォームの代わりに状態説明が表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+    authStore.user = createUserMe(sampleTeam.ownerId + 999)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchMyTeams).mockResolvedValue([
+      { ...sampleTeam, id: 99, name: 'Other Team', tournamentId: sampleTeam.tournamentId },
+    ])
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.text()).toContain('この大会ではすでに別のチームに所属しています')
+  })
+
+  it('このTeamへのPENDING応募が既にある場合、応募フォームの代わりに状態説明が表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+    const applicantId = sampleTeam.ownerId + 999
+    authStore.user = createUserMe(applicantId)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchMyApplications).mockResolvedValue([
+      {
+        id: 1,
+        teamId: sampleTeam.id,
+        userId: applicantId,
+        userName: 'Applicant',
+        message: null,
+        status: 'PENDING',
+        createdAt: '2026-09-01T00:00:00',
+        updatedAt: '2026-09-01T00:00:00',
+      },
+    ])
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.text()).toContain('このチームへの参加申請は受付済みです')
+  })
+
+  it('事前判定API(fetchMyTeams/fetchMyApplications)が失敗してもTeam Detailは表示され、応募フォームは利用可能なままになる', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+    authStore.user = createUserMe(sampleTeam.ownerId + 999)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchMyTeams).mockRejectedValue(new Error('network error'))
+    vi.mocked(fetchMyApplications).mockRejectedValue(new Error('network error'))
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Team Ryu')
     expect(wrapper.find('form').exists()).toBe(true)
     expect(wrapper.text()).toContain('このチームに参加申請する')
   })

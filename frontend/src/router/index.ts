@@ -101,6 +101,13 @@ router.beforeEach((to) => {
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     return '/login'
   }
+
+  // ログイン済みユーザーが/loginへ直接アクセスした場合は/mypageへ戻す。
+  // /mypageはrequiresAuth: trueだがログイン済みのため上の条件には掛からず、
+  // 再度/loginへ戻されることはない(redirect loopにならない)。
+  if (to.name === 'login' && authStore.isAuthenticated) {
+    return '/mypage'
+  }
 })
 
 export default router

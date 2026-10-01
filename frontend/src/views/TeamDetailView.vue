@@ -2,9 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import axios from 'axios'
-import { fetchTeamById, fetchTeamMembers } from '@/api/teams'
+import { fetchMyTeams, fetchTeamById, fetchTeamMembers } from '@/api/teams'
 import { fetchCharacters } from '@/api/characters'
-import { createApplication } from '@/api/applications'
+import { createApplication, fetchMyApplications } from '@/api/applications'
 import { useAuthStore } from '@/stores/auth'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
@@ -12,6 +12,7 @@ import LoadingState from '@/components/ui/LoadingState.vue'
 import ErrorState from '@/components/ui/ErrorState.vue'
 import type { Team, TeamMember } from '@/types/team'
 import type { Character } from '@/types/character'
+import type { RecruitmentApplication } from '@/types/recruitmentApplication'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -22,6 +23,11 @@ const characterNames = ref<Map<number, string>>(new Map())
 const loading = ref(false)
 const error = ref('')
 const notFound = ref(false)
+
+// 応募欄の事前判定(member/別Team所属/申請済み)用。取得失敗時はnullのままとし、
+// Team Detail本体はクラッシュさせず、事前判定なし(=既存どおりフォームを表示可能)として扱う。
+const myTeams = ref<Team[] | null>(null)
+const myApplications = ref<RecruitmentApplication[] | null>(null)
 
 // フロント側のowner判定はUI制御のみ。実際の認可はPATCH /api/teams/{id}側で行われる。
 const isOwner = computed(() => team.value !== null && team.value.ownerId === authStore.user?.id)
@@ -40,14 +46,29 @@ async function loadTeam() {
     const id = String(route.params.id)
     // Character名の解決に失敗しても(characterNamesが空のままでも)Team本体・Membersの
     // 表示は継続できるよう、fetchCharactersのみ個別にcatchしfallback(空配列)にする。
-    const [teamResult, membersResult, charactersResult] = await Promise.all([
-      fetchTeamById(id),
-      fetchTeamMembers(id),
-      fetchCharacters().catch((): Character[] => []),
-    ])
+    // myTeams/myApplicationsは応募欄の事前判定(UX上の事前表示)にのみ使う補助情報のため、
+    // 取得に失敗してもTeam Detail本体は表示できるようnullにフォールバックする
+    // (未ログイン時はそもそも呼び出さない)。
+    const myTeamsPromise = authStore.isAuthenticated
+      ? fetchMyTeams().catch((): Team[] | null => null)
+      : Promise.resolve(null)
+    const myApplicationsPromise = authStore.isAuthenticated
+      ? fetchMyApplications().catch((): RecruitmentApplication[] | null => null)
+      : Promise.resolve(null)
+
+    const [teamResult, membersResult, charactersResult, myTeamsResult, myApplicationsResult] =
+      await Promise.all([
+        fetchTeamById(id),
+        fetchTeamMembers(id),
+        fetchCharacters().catch((): Character[] => []),
+        myTeamsPromise,
+        myApplicationsPromise,
+      ])
     team.value = teamResult
     members.value = membersResult
     characterNames.value = new Map(charactersResult.map((character) => [character.id, character.name]))
+    myTeams.value = myTeamsResult
+    myApplications.value = myApplicationsResult
   } catch (e) {
     if (axios.isAxiosError(e) && e.response?.status === 404) {
       notFound.value = true
@@ -73,6 +94,38 @@ const characterRequirementNames = computed(() => {
     return '指定なし'
   }
   return ids.map((id) => characterNames.value.get(id) ?? '不明なキャラクター').join(' / ')
+})
+
+// A. 既にこのTeamのmemberかどうか(取得済みのmembersだけで判定可能、追加APIなし)
+const isCurrentTeamMember = computed(() =>
+  members.value.some((member) => member.userId === authStore.user?.id),
+)
+
+// B. 同一Tournamentの別Teamに所属済みかどうか(既存fetchMyTeams()の結果で判定)。
+// myTeamsが取得できていない(未ログイン or 取得失敗)場合はfalse扱いとし、
+// 事前判定なし=既存どおりフォームを表示可能な状態にフォールバックする。
+const isInAnotherTeamSameTournament = computed(() => {
+  const currentTeam = team.value
+  if (currentTeam === null || myTeams.value === null) {
+    return false
+  }
+  return myTeams.value.some(
+    (myTeam) => myTeam.tournamentId === currentTeam.tournamentId && myTeam.id !== currentTeam.id,
+  )
+})
+
+// C. このTeamへのPENDING応募が既にあるかどうか(既存fetchMyApplications()の結果で判定)。
+// RecruitmentApplicationにはtournamentIdが無く、同一Tournament内の「別Team」への応募まで
+// 判定するには応募ごとにfetchTeamByIdが必要になり複雑化するため、今回は
+// 「このTeamへのPENDING応募があるか」までに判定範囲を限定している(claude-report.md参照)。
+const hasPendingApplicationForThisTeam = computed(() => {
+  const currentTeam = team.value
+  if (currentTeam === null || myApplications.value === null) {
+    return false
+  }
+  return myApplications.value.some(
+    (application) => application.teamId === currentTeam.id && application.status === 'PENDING',
+  )
 })
 
 async function handleApply() {
@@ -172,23 +225,37 @@ async function handleApply() {
           >
         </div>
 
-        <BaseCard v-else-if="authStore.isAuthenticated" class="team-detail-view__application">
-          <template v-if="applicationSubmitted">
-            <p>参加申請しました</p>
-            <BaseButton to="/applications/my">自分の参加申請を見る</BaseButton>
-          </template>
-          <form v-else @submit.prevent="handleApply">
-            <h2>このチームに参加申請する</h2>
-            <div class="team-detail-view__form-field">
-              <label for="applicationMessage">参加申請メッセージ</label>
-              <textarea id="applicationMessage" v-model="applicationMessage"></textarea>
-            </div>
-            <p v-if="applicationError" role="alert">{{ applicationError }}</p>
-            <BaseButton type="submit" :disabled="applying">
-              {{ applying ? '送信中...' : 'このチームに参加申請する' }}
-            </BaseButton>
-          </form>
-        </BaseCard>
+        <template v-else-if="authStore.isAuthenticated">
+          <BaseCard v-if="isCurrentTeamMember" class="team-detail-view__status-card">
+            <p>このチームのメンバーです</p>
+          </BaseCard>
+          <BaseCard v-else-if="isInAnotherTeamSameTournament" class="team-detail-view__status-card">
+            <p>この大会ではすでに別のチームに所属しています</p>
+          </BaseCard>
+          <BaseCard
+            v-else-if="hasPendingApplicationForThisTeam"
+            class="team-detail-view__status-card"
+          >
+            <p>このチームへの参加申請は受付済みです</p>
+          </BaseCard>
+          <BaseCard v-else class="team-detail-view__application">
+            <template v-if="applicationSubmitted">
+              <p>参加申請しました</p>
+              <BaseButton to="/applications/my">自分の参加申請を見る</BaseButton>
+            </template>
+            <form v-else @submit.prevent="handleApply">
+              <h2>このチームに参加申請する</h2>
+              <div class="team-detail-view__form-field">
+                <label for="applicationMessage">参加申請メッセージ</label>
+                <textarea id="applicationMessage" v-model="applicationMessage"></textarea>
+              </div>
+              <p v-if="applicationError" role="alert">{{ applicationError }}</p>
+              <BaseButton type="submit" :disabled="applying">
+                {{ applying ? '送信中...' : 'このチームに参加申請する' }}
+              </BaseButton>
+            </form>
+          </BaseCard>
+        </template>
 
         <BaseCard v-else class="team-detail-view__login-prompt">
           <p>参加申請するにはログインしてください</p>
@@ -318,12 +385,18 @@ async function handleApply() {
 }
 
 .team-detail-view__application,
-.team-detail-view__login-prompt {
+.team-detail-view__login-prompt,
+.team-detail-view__status-card {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-3);
   margin-bottom: var(--space-8);
+}
+
+.team-detail-view__status-card p {
+  margin: 0;
+  color: var(--color-text-secondary);
 }
 
 .team-detail-view__application form {
