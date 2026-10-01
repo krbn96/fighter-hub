@@ -2,21 +2,16 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { apiClient } from '@/api/client'
 import { createTeam } from '@/api/teams'
-import { RANK_OPTIONS } from '@/constants/ranks'
+import { fetchCharacters } from '@/api/characters'
+import TeamForm from '@/components/team/TeamForm.vue'
 import type { Character } from '@/types/character'
-import type { TeamCreateRequest } from '@/types/team'
+import type { TeamCreateRequest, TeamFormValues } from '@/types/team'
 
 const route = useRoute()
 const router = useRouter()
 
 const tournamentId = String(route.params.id)
-
-const name = ref('')
-const rankRequirement = ref('')
-const recruitmentMessage = ref('')
-const selectedCharacterIds = ref<number[]>([])
 
 const characters = ref<Character[]>([])
 const submitting = ref(false)
@@ -24,8 +19,7 @@ const error = ref('')
 
 onMounted(async () => {
   try {
-    const response = await apiClient.get<Character[]>('/characters')
-    characters.value = response.data
+    characters.value = await fetchCharacters()
   } catch {
     // キャラクター一覧が取得できなくても、募集キャラクター条件を指定しない
     // チーム作成自体は継続できるため、フォーム全体は止めない。
@@ -33,17 +27,13 @@ onMounted(async () => {
   }
 })
 
-async function handleSubmit() {
+async function handleSubmit(values: TeamFormValues) {
   submitting.value = true
   error.value = ''
 
   const request: TeamCreateRequest = {
     tournamentId: Number(tournamentId),
-    name: name.value,
-    rankRequirement: rankRequirement.value === '' ? null : rankRequirement.value,
-    characterRequirements:
-      selectedCharacterIds.value.length > 0 ? selectedCharacterIds.value : null,
-    recruitmentMessage: recruitmentMessage.value === '' ? null : recruitmentMessage.value,
+    ...values,
   }
 
   try {
@@ -63,45 +53,47 @@ async function handleSubmit() {
     submitting.value = false
   }
 }
+
+function handleCancel() {
+  router.push(`/tournaments/${tournamentId}`)
+}
 </script>
 
 <template>
-  <main>
-    <h1>チーム作成</h1>
-    <form @submit.prevent="handleSubmit">
-      <div>
-        <label for="name">チーム名</label>
-        <input id="name" v-model="name" type="text" required />
-      </div>
+  <main class="team-create-view">
+    <div class="container">
+      <header class="team-create-view__header">
+        <h1>CREATE TEAM</h1>
+        <p>新しいチームを作って、メンバーを募集しよう。</p>
+      </header>
 
-      <div>
-        <label for="rankRequirement">募集ランク</label>
-        <select id="rankRequirement" v-model="rankRequirement">
-          <option value="">指定なし</option>
-          <option v-for="rank in RANK_OPTIONS" :key="rank.value" :value="rank.value">
-            {{ rank.label }}
-          </option>
-        </select>
-      </div>
-
-      <div>
-        <p>募集キャラクター</p>
-        <label v-for="character in characters" :key="character.id">
-          <input type="checkbox" :value="character.id" v-model="selectedCharacterIds" />
-          {{ character.name }}
-        </label>
-      </div>
-
-      <div>
-        <label for="recruitmentMessage">募集メッセージ</label>
-        <textarea id="recruitmentMessage" v-model="recruitmentMessage"></textarea>
-      </div>
-
-      <p v-if="error" role="alert">{{ error }}</p>
-
-      <button type="submit" :disabled="submitting">
-        {{ submitting ? '作成中...' : 'チームを作成' }}
-      </button>
-    </form>
+      <TeamForm
+        :characters="characters"
+        :submitting="submitting"
+        submit-label="CREATE TEAM"
+        submitting-label="CREATING..."
+        :error="error"
+        @submit="handleSubmit"
+        @cancel="handleCancel"
+      />
+    </div>
   </main>
 </template>
+
+<style scoped>
+.team-create-view {
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-12);
+}
+
+.team-create-view__header {
+  max-width: 640px;
+  margin: 0 auto var(--space-6);
+  text-align: center;
+}
+
+.team-create-view__header p {
+  margin-top: var(--space-2);
+  color: var(--color-text-secondary);
+}
+</style>

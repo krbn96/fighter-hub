@@ -5,11 +5,16 @@ import { createPinia, setActivePinia } from 'pinia'
 import TeamDetailView from '../TeamDetailView.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { Team, TeamMember } from '@/types/team'
+import type { Character } from '@/types/character'
 import type { UserMe } from '@/types/user'
 
 vi.mock('@/api/teams', () => ({
   fetchTeamById: vi.fn<(id: string) => Promise<Team>>(),
   fetchTeamMembers: vi.fn<(teamId: string) => Promise<TeamMember[]>>(),
+}))
+
+vi.mock('@/api/characters', () => ({
+  fetchCharacters: vi.fn<() => Promise<Character[]>>(),
 }))
 
 vi.mock('@/api/applications', () => ({
@@ -27,6 +32,7 @@ vi.mock('vue-router', async (importOriginal) => {
 })
 
 import { fetchTeamById, fetchTeamMembers } from '@/api/teams'
+import { fetchCharacters } from '@/api/characters'
 import { createApplication } from '@/api/applications'
 
 const sampleTeam: Team = {
@@ -45,6 +51,11 @@ const sampleTeam: Team = {
 
 const defaultMembers: TeamMember[] = [
   { userId: sampleTeam.ownerId, userName: sampleTeam.ownerName, joinedAt: '2026-09-01T00:00:00' },
+]
+
+const sampleCharacters: Character[] = [
+  { id: 1, name: 'RYU' },
+  { id: 2, name: 'KEN' },
 ]
 
 function createUserMe(id: number): UserMe {
@@ -71,9 +82,11 @@ describe('TeamDetailView', () => {
     vi.mocked(fetchTeamMembers).mockReset()
     // 既存テストが個別にmembersを設定していないケースのdefault(owner 1人所属)
     vi.mocked(fetchTeamMembers).mockResolvedValue(defaultMembers)
+    vi.mocked(fetchCharacters).mockReset()
+    vi.mocked(fetchCharacters).mockResolvedValue(sampleCharacters)
   })
 
-  it('API取得成功時にチーム詳細が表示される', async () => {
+  it('API取得成功時にチーム詳細が表示される(募集キャラクターはCharacter Nameで表示される)', async () => {
     vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
 
     const wrapper = mount(TeamDetailView, {
@@ -85,9 +98,39 @@ describe('TeamDetailView', () => {
     expect(wrapper.text()).toContain('STREET FIGHTER 6 CUP')
     expect(wrapper.text()).toContain('Owner User')
     expect(wrapper.text()).toContain('MASTER')
-    expect(wrapper.text()).toContain('1, 2')
+    expect(wrapper.text()).toContain('RYU / KEN')
+    expect(wrapper.text()).not.toContain('1, 2')
     expect(wrapper.text()).toContain('誰でも歓迎です')
     expect(fetchTeamById).toHaveBeenCalledWith('10')
+    expect(fetchCharacters).toHaveBeenCalledTimes(1)
+  })
+
+  it('characterRequirementsのcharacterIdがCharacter一覧に存在しない場合は不明なキャラクターと表示する', async () => {
+    vi.mocked(fetchTeamById).mockResolvedValue({ ...sampleTeam, characterRequirements: [999] })
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('不明なキャラクター')
+    expect(wrapper.text()).not.toContain('999')
+  })
+
+  it('Character API失敗時もTeam Detail本体(name/members等)は表示され、raw IDも表示されない', async () => {
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchCharacters).mockRejectedValue(new Error('network error'))
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Team Ryu')
+    expect(wrapper.text()).toContain('STREET FIGHTER 6 CUP')
+    expect(wrapper.text()).toContain('MEMBERS (1)')
+    expect(wrapper.text()).toContain('不明なキャラクター')
+    expect(wrapper.text()).not.toContain('1, 2')
   })
 
   it('nullable項目がnullの場合は指定なしと表示される', async () => {

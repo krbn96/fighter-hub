@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import axios from 'axios'
 import { fetchTeamById, fetchTeamMembers } from '@/api/teams'
+import { fetchCharacters } from '@/api/characters'
 import { createApplication } from '@/api/applications'
 import { useAuthStore } from '@/stores/auth'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -10,12 +11,14 @@ import BaseCard from '@/components/ui/BaseCard.vue'
 import LoadingState from '@/components/ui/LoadingState.vue'
 import ErrorState from '@/components/ui/ErrorState.vue'
 import type { Team, TeamMember } from '@/types/team'
+import type { Character } from '@/types/character'
 
 const route = useRoute()
 const authStore = useAuthStore()
 
 const team = ref<Team | null>(null)
 const members = ref<TeamMember[]>([])
+const characterNames = ref<Map<number, string>>(new Map())
 const loading = ref(false)
 const error = ref('')
 const notFound = ref(false)
@@ -35,12 +38,16 @@ async function loadTeam() {
 
   try {
     const id = String(route.params.id)
-    const [teamResult, membersResult] = await Promise.all([
+    // Character名の解決に失敗しても(characterNamesが空のままでも)Team本体・Membersの
+    // 表示は継続できるよう、fetchCharactersのみ個別にcatchしfallback(空配列)にする。
+    const [teamResult, membersResult, charactersResult] = await Promise.all([
       fetchTeamById(id),
       fetchTeamMembers(id),
+      fetchCharacters().catch((): Character[] => []),
     ])
     team.value = teamResult
     members.value = membersResult
+    characterNames.value = new Map(charactersResult.map((character) => [character.id, character.name]))
   } catch (e) {
     if (axios.isAxiosError(e) && e.response?.status === 404) {
       notFound.value = true
@@ -57,6 +64,16 @@ onMounted(loadTeam)
 function memberRole(member: TeamMember): 'OWNER' | 'MEMBER' {
   return team.value !== null && member.userId === team.value.ownerId ? 'OWNER' : 'MEMBER'
 }
+
+// Character一覧の取得に失敗した場合、または個々のIDがcharacterNamesに存在しない場合は
+// 内部IDをそのまま露出せず「不明なキャラクター」で表す。
+const characterRequirementNames = computed(() => {
+  const ids = team.value?.characterRequirements
+  if (!ids || ids.length === 0) {
+    return '指定なし'
+  }
+  return ids.map((id) => characterNames.value.get(id) ?? '不明なキャラクター').join(' / ')
+})
 
 async function handleApply() {
   if (team.value === null) {
@@ -116,12 +133,8 @@ async function handleApply() {
             }}</span>
           </div>
           <div class="team-detail-view__meta-item">
-            <span class="team-detail-view__meta-label">募集キャラクターID</span>
-            <span class="team-detail-view__meta-value">{{
-              team.characterRequirements && team.characterRequirements.length > 0
-                ? team.characterRequirements.join(', ')
-                : '指定なし'
-            }}</span>
+            <span class="team-detail-view__meta-label">募集キャラクター</span>
+            <span class="team-detail-view__meta-value">{{ characterRequirementNames }}</span>
           </div>
           <div class="team-detail-view__meta-item team-detail-view__meta-item--full">
             <span class="team-detail-view__meta-label">募集メッセージ</span>

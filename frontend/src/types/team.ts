@@ -52,3 +52,13 @@ export interface TeamMember {
   userName: string
   joinedAt: string
 }
+
+// TeamForm.vue(Create/Edit共通フォーム)が扱うフォーム値の型。
+// TeamCreateRequestからtournamentIdを除いたものと同じ形で、4項目は常にすべて埋まる
+// (TeamUpdateRequestと違いoptionalにしない。Editは既存仕様どおり4項目を毎回送信するため)。
+export interface TeamFormValues {
+  name: string
+  rankRequirement: string | null
+  characterRequirements: number[] | null
+  recruitmentMessage: string | null
+}
