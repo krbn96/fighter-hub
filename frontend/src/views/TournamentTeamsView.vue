@@ -43,7 +43,7 @@ onMounted(loadTeams)
   <main class="tournament-teams-view">
     <div class="container">
       <header class="tournament-teams-view__header">
-        <h1>募集チーム一覧</h1>
+        <h1>FIND A TEAM</h1>
       </header>
 
       <LoadingState v-if="loading" />

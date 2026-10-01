@@ -177,8 +177,15 @@ function handleSubmit() {
         <span class="profile-edit-form__group-label">MAIN CHARACTER</span>
         <BaseCard class="profile-edit-form__character-card">
           <div class="profile-edit-form__character-field">
-            <label class="profile-edit-form__sublabel">CHARACTER</label>
-            <select v-model="mainSlot.characterId" :disabled="!charactersAvailable" required>
+            <label class="profile-edit-form__sublabel" for="profile-edit-character-main"
+              >CHARACTER</label
+            >
+            <select
+              id="profile-edit-character-main"
+              v-model="mainSlot.characterId"
+              :disabled="!charactersAvailable"
+              required
+            >
               <option :value="null" disabled>選択してください</option>
               <option v-for="character in characters" :key="character.id" :value="character.id">
                 {{ character.name }}
@@ -186,16 +193,19 @@ function handleSubmit() {
             </select>
           </div>
           <div class="profile-edit-form__character-field">
-            <label class="profile-edit-form__sublabel">RANK</label>
-            <select v-model="mainSlot.rank" :disabled="!charactersAvailable">
+            <label class="profile-edit-form__sublabel" for="profile-edit-rank-main">RANK</label>
+            <select id="profile-edit-rank-main" v-model="mainSlot.rank" :disabled="!charactersAvailable">
               <option v-for="rank in RANK_OPTIONS" :key="rank.value" :value="rank.value">
                 {{ rank.label }}
               </option>
             </select>
           </div>
           <div class="profile-edit-form__character-field">
-            <label class="profile-edit-form__sublabel">MR (MASTERのみ入力可)</label>
+            <label class="profile-edit-form__sublabel" for="profile-edit-mr-main"
+              >MR (MASTERのみ入力可)</label
+            >
             <input
+              id="profile-edit-mr-main"
               v-model="mainSlot.mrText"
               type="text"
               inputmode="numeric"
@@ -212,8 +222,14 @@ function handleSubmit() {
           <BaseCard class="profile-edit-form__character-card">
             <p class="profile-edit-form__slot-label">SUB 1</p>
             <div class="profile-edit-form__character-field">
-              <label class="profile-edit-form__sublabel">CHARACTER</label>
-              <select v-model="subSlot1.characterId" :disabled="!charactersAvailable">
+              <label class="profile-edit-form__sublabel" for="profile-edit-character-sub1"
+                >CHARACTER</label
+              >
+              <select
+                id="profile-edit-character-sub1"
+                v-model="subSlot1.characterId"
+                :disabled="!charactersAvailable"
+              >
                 <option :value="null">未設定</option>
                 <option v-for="character in characters" :key="character.id" :value="character.id">
                   {{ character.name }}
@@ -221,8 +237,9 @@ function handleSubmit() {
               </select>
             </div>
             <div class="profile-edit-form__character-field">
-              <label class="profile-edit-form__sublabel">RANK</label>
+              <label class="profile-edit-form__sublabel" for="profile-edit-rank-sub1">RANK</label>
               <select
+                id="profile-edit-rank-sub1"
                 v-model="subSlot1.rank"
                 :disabled="!charactersAvailable || subSlot1.characterId === null"
               >
@@ -232,8 +249,11 @@ function handleSubmit() {
               </select>
             </div>
             <div class="profile-edit-form__character-field">
-              <label class="profile-edit-form__sublabel">MR (MASTERのみ入力可)</label>
+              <label class="profile-edit-form__sublabel" for="profile-edit-mr-sub1"
+                >MR (MASTERのみ入力可)</label
+              >
               <input
+                id="profile-edit-mr-sub1"
                 v-model="subSlot1.mrText"
                 type="text"
                 inputmode="numeric"
@@ -246,8 +266,14 @@ function handleSubmit() {
           <BaseCard class="profile-edit-form__character-card">
             <p class="profile-edit-form__slot-label">SUB 2</p>
             <div class="profile-edit-form__character-field">
-              <label class="profile-edit-form__sublabel">CHARACTER</label>
-              <select v-model="subSlot2.characterId" :disabled="!charactersAvailable">
+              <label class="profile-edit-form__sublabel" for="profile-edit-character-sub2"
+                >CHARACTER</label
+              >
+              <select
+                id="profile-edit-character-sub2"
+                v-model="subSlot2.characterId"
+                :disabled="!charactersAvailable"
+              >
                 <option :value="null">未設定</option>
                 <option v-for="character in characters" :key="character.id" :value="character.id">
                   {{ character.name }}
@@ -255,8 +281,9 @@ function handleSubmit() {
               </select>
             </div>
             <div class="profile-edit-form__character-field">
-              <label class="profile-edit-form__sublabel">RANK</label>
+              <label class="profile-edit-form__sublabel" for="profile-edit-rank-sub2">RANK</label>
               <select
+                id="profile-edit-rank-sub2"
                 v-model="subSlot2.rank"
                 :disabled="!charactersAvailable || subSlot2.characterId === null"
               >
@@ -266,8 +293,11 @@ function handleSubmit() {
               </select>
             </div>
             <div class="profile-edit-form__character-field">
-              <label class="profile-edit-form__sublabel">MR (MASTERのみ入力可)</label>
+              <label class="profile-edit-form__sublabel" for="profile-edit-mr-sub2"
+                >MR (MASTERのみ入力可)</label
+              >
               <input
+                id="profile-edit-mr-sub2"
                 v-model="subSlot2.mrText"
                 type="text"
                 inputmode="numeric"
@@ -280,8 +310,14 @@ function handleSubmit() {
           <BaseCard class="profile-edit-form__character-card">
             <p class="profile-edit-form__slot-label">SUB 3</p>
             <div class="profile-edit-form__character-field">
-              <label class="profile-edit-form__sublabel">CHARACTER</label>
-              <select v-model="subSlot3.characterId" :disabled="!charactersAvailable">
+              <label class="profile-edit-form__sublabel" for="profile-edit-character-sub3"
+                >CHARACTER</label
+              >
+              <select
+                id="profile-edit-character-sub3"
+                v-model="subSlot3.characterId"
+                :disabled="!charactersAvailable"
+              >
                 <option :value="null">未設定</option>
                 <option v-for="character in characters" :key="character.id" :value="character.id">
                   {{ character.name }}
@@ -289,8 +325,9 @@ function handleSubmit() {
               </select>
             </div>
             <div class="profile-edit-form__character-field">
-              <label class="profile-edit-form__sublabel">RANK</label>
+              <label class="profile-edit-form__sublabel" for="profile-edit-rank-sub3">RANK</label>
               <select
+                id="profile-edit-rank-sub3"
                 v-model="subSlot3.rank"
                 :disabled="!charactersAvailable || subSlot3.characterId === null"
               >
@@ -300,8 +337,11 @@ function handleSubmit() {
               </select>
             </div>
             <div class="profile-edit-form__character-field">
-              <label class="profile-edit-form__sublabel">MR (MASTERのみ入力可)</label>
+              <label class="profile-edit-form__sublabel" for="profile-edit-mr-sub3"
+                >MR (MASTERのみ入力可)</label
+              >
               <input
+                id="profile-edit-mr-sub3"
                 v-model="subSlot3.mrText"
                 type="text"
                 inputmode="numeric"

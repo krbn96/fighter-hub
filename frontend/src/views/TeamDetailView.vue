@@ -191,7 +191,7 @@ async function handleApply() {
           </div>
           <div class="team-detail-view__meta-item team-detail-view__meta-item--full">
             <span class="team-detail-view__meta-label">募集メッセージ</span>
-            <span class="team-detail-view__meta-value">{{
+            <span class="team-detail-view__meta-value team-detail-view__message">{{
               team.recruitmentMessage ?? '指定なし'
             }}</span>
           </div>
@@ -307,6 +307,10 @@ async function handleApply() {
 
 .team-detail-view__meta-value {
   font-weight: 700;
+}
+
+.team-detail-view__message {
+  white-space: pre-wrap;
 }
 
 .team-detail-view__members {

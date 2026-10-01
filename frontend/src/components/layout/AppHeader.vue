@@ -55,7 +55,11 @@ function handleLogout() {
         >
 
         <div class="app-header__auth">
-          <RouterLink v-if="!authStore.isAuthenticated" to="/login" class="app-header__link"
+          <RouterLink
+            v-if="!authStore.isAuthenticated"
+            to="/login"
+            class="app-header__link"
+            @click="closeMenu"
             >Login</RouterLink
           >
           <template v-else>

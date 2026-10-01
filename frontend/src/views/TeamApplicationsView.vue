@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import axios from 'axios'
 import { fetchTeamById } from '@/api/teams'
 import { approveApplication, fetchTeamApplications, rejectApplication } from '@/api/applications'
@@ -119,7 +119,8 @@ async function handleReject(applicationId: number) {
         <ErrorState v-if="!isOwner" message="このチームの参加申請を確認する権限がありません" />
         <template v-else>
           <header class="team-applications-view__header">
-            <h1>{{ team.name }} の参加申請一覧</h1>
+            <h1>APPLICATIONS</h1>
+            <p>{{ team.name }}</p>
           </header>
 
           <p v-if="actionError" class="team-applications-view__action-error" role="alert">
@@ -162,6 +163,10 @@ async function handleReject(applicationId: number) {
               </div>
             </BaseCard>
           </div>
+
+          <p class="team-applications-view__back">
+            <RouterLink :to="`/teams/${teamId}`">チーム詳細へ戻る</RouterLink>
+          </p>
         </template>
       </template>
     </div>
@@ -176,6 +181,11 @@ async function handleReject(applicationId: number) {
 
 .team-applications-view__header {
   margin-bottom: var(--space-6);
+}
+
+.team-applications-view__header p {
+  margin-top: var(--space-2);
+  color: var(--color-text-secondary);
 }
 
 .team-applications-view__action-error {
@@ -225,5 +235,10 @@ async function handleReject(applicationId: number) {
   flex-wrap: wrap;
   gap: var(--space-3);
   margin-top: var(--space-2);
+}
+
+.team-applications-view__back {
+  margin-top: var(--space-8);
+  font-size: 0.85rem;
 }
 </style>

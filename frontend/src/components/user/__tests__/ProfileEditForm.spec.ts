@@ -37,6 +37,26 @@ function subCards(wrapper: ReturnType<typeof mount>) {
 }
 
 describe('ProfileEditForm', () => {
+  it('MAIN/SUB1/SUB2/SUB3のCHARACTER/RANK/MRがlabel[for]とcontrol[id]で正しく対応している', () => {
+    const wrapper = mount(ProfileEditForm, {
+      props: { user: sampleUser, characters: sampleCharacters, saving: false, error: '' },
+    })
+
+    const slots = ['main', 'sub1', 'sub2', 'sub3']
+    const fields = ['character', 'rank', 'mr']
+
+    for (const slot of slots) {
+      for (const field of fields) {
+        const id = `profile-edit-${field}-${slot}`
+        const control = wrapper.find(`#${id}`)
+        const label = wrapper.find(`label[for="${id}"]`)
+
+        expect(control.exists(), `#${id} control should exist`).toBe(true)
+        expect(label.exists(), `label[for="${id}"] should exist`).toBe(true)
+      }
+    }
+  })
+
   it('authStore.user相当のuser propから初期値が設定される', () => {
     const wrapper = mount(ProfileEditForm, {
       props: { user: sampleUser, characters: sampleCharacters, saving: false, error: '' },

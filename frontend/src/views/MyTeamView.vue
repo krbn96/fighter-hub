@@ -39,7 +39,7 @@ function roleLabel(team: Team): 'OWNER' | 'MEMBER' {
   <main class="my-team-view">
     <div class="container">
       <header class="my-team-view__header">
-        <h1>所属チーム一覧</h1>
+        <h1>MY TEAMS</h1>
       </header>
 
       <LoadingState v-if="loading" />

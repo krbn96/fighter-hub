@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
 import TeamApplicationsView from '../TeamApplicationsView.vue'
@@ -101,7 +101,9 @@ describe('TeamApplicationsView', () => {
     vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
     vi.mocked(fetchTeamApplications).mockResolvedValue([pendingApplication, approvedApplication])
 
-    const wrapper = mount(TeamApplicationsView)
+    const wrapper = mount(TeamApplicationsView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
     await flushPromises()
 
     expect(wrapper.text()).toContain('Applicant User')
@@ -121,7 +123,9 @@ describe('TeamApplicationsView', () => {
       .mockResolvedValueOnce([{ ...pendingApplication, status: 'APPROVED' }])
     vi.mocked(approveApplication).mockResolvedValue({ ...pendingApplication, status: 'APPROVED' })
 
-    const wrapper = mount(TeamApplicationsView)
+    const wrapper = mount(TeamApplicationsView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
     await flushPromises()
 
     const approveButton = wrapper.findAll('button')[0]
@@ -141,7 +145,9 @@ describe('TeamApplicationsView', () => {
     vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
     vi.mocked(fetchTeamApplications).mockResolvedValue([approvedApplication])
 
-    const wrapper = mount(TeamApplicationsView)
+    const wrapper = mount(TeamApplicationsView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
     await flushPromises()
 
     expect(wrapper.findAll('button').length).toBe(0)
@@ -159,7 +165,9 @@ describe('TeamApplicationsView', () => {
       .mockResolvedValueOnce([{ ...pendingApplication, status: 'REJECTED' }])
     vi.mocked(rejectApplication).mockResolvedValue({ ...pendingApplication, status: 'REJECTED' })
 
-    const wrapper = mount(TeamApplicationsView)
+    const wrapper = mount(TeamApplicationsView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
     await flushPromises()
 
     const rejectButton = wrapper.findAll('button')[1]
@@ -179,7 +187,9 @@ describe('TeamApplicationsView', () => {
     vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
     vi.mocked(fetchTeamApplications).mockResolvedValue([])
 
-    const wrapper = mount(TeamApplicationsView)
+    const wrapper = mount(TeamApplicationsView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
     await flushPromises()
 
     expect(wrapper.text()).toContain('参加申請はありません')
@@ -199,7 +209,9 @@ describe('TeamApplicationsView', () => {
       }),
     )
 
-    const wrapper = mount(TeamApplicationsView)
+    const wrapper = mount(TeamApplicationsView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
     await flushPromises()
 
     const [approveButton, rejectButton] = wrapper.findAll('button')
@@ -223,7 +235,9 @@ describe('TeamApplicationsView', () => {
       response: { status: 404 },
     })
 
-    const wrapper = mount(TeamApplicationsView)
+    const wrapper = mount(TeamApplicationsView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
     await flushPromises()
 
     await wrapper.findAll('button')[0]?.trigger('click')
@@ -243,13 +257,37 @@ describe('TeamApplicationsView', () => {
       response: { status: 409 },
     })
 
-    const wrapper = mount(TeamApplicationsView)
+    const wrapper = mount(TeamApplicationsView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
     await flushPromises()
 
     await wrapper.findAll('button')[0]?.trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('この申請は既に処理済みか、承認できない状態です')
+  })
+
+  it('APPLICATIONS見出しとチーム名のsubtitle、チーム詳細へ戻るリンクが表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.user = createUserMe(sampleTeam.ownerId)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTeamApplications).mockResolvedValue([pendingApplication])
+
+    const wrapper = mount(TeamApplicationsView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('h1').text()).toBe('APPLICATIONS')
+    expect(wrapper.text()).toContain(sampleTeam.name)
+
+    const backLink = wrapper
+      .findAllComponents(RouterLinkStub)
+      .find((link) => link.text().includes('チーム詳細へ戻る'))
+    expect(backLink).toBeDefined()
+    expect(backLink?.props('to')).toBe(`/teams/${sampleTeam.id}`)
   })
 
   it('non-ownerの場合「このチームの参加申請を確認する権限がありません」が表示される', async () => {
@@ -262,7 +300,9 @@ describe('TeamApplicationsView', () => {
       response: { status: 403 },
     })
 
-    const wrapper = mount(TeamApplicationsView)
+    const wrapper = mount(TeamApplicationsView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
     await flushPromises()
 
     expect(wrapper.text()).toContain('このチームの参加申請を確認する権限がありません')

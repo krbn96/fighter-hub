@@ -79,6 +79,9 @@ body {
   font-family: var(--font-family-base);
   font-size: 15px;
   line-height: 1.6;
+  /* ユーザー自由入力(URL等、スペースを含まない長い連続文字列)でMobileに
+     横スクロールが発生しないよう、全体のtext wrappingルールとして設定する。 */
+  overflow-wrap: break-word;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
