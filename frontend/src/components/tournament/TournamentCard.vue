@@ -1,13 +1,18 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import { formatDateTime } from '@/utils/formatDateTime'
 import { formatTeamSize } from '@/utils/formatTeamSize'
+import { getRecruitmentStatus } from '@/utils/recruitmentStatus'
 import type { Tournament } from '@/types/tournament'
 
-defineProps<{
+const props = defineProps<{
   tournament: Tournament
 }>()
+
+// 募集状態はbackendのstatusではなくrecruitmentDeadlineから導出する。
+const recruitmentStatus = computed(() => getRecruitmentStatus(props.tournament.recruitmentDeadline))
 </script>
 
 <template>
@@ -21,12 +26,13 @@ defineProps<{
     <div class="tournament-card__body">
       <div class="tournament-card__header">
         <h3 class="tournament-card__name">{{ tournament.name }}</h3>
-        <StatusBadge :status="tournament.status" />
+        <StatusBadge :status="recruitmentStatus" />
       </div>
 
       <div class="tournament-card__meta">
-        <span>{{ formatDateTime(tournament.startAt) }}</span>
         <span>{{ formatTeamSize(tournament.teamSize) }}</span>
+        <span>DEADLINE {{ formatDateTime(tournament.recruitmentDeadline) }}</span>
+        <span>START {{ formatDateTime(tournament.startAt) }}</span>
       </div>
     </div>
   </RouterLink>

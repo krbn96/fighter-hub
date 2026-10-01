@@ -59,7 +59,7 @@ class UserServiceTest {
     @Test
     void createUser_未登録のemailと存在するcharacterIdを指定した場合_登録済みUserのidを返す() {
 
-        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "Master", 1800);
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "MASTER", 1800);
         UserCreateRequest request = new UserCreateRequest(
                 "user@example.com",
                 "password123",
@@ -97,14 +97,14 @@ class UserServiceTest {
         assertEquals("hashed-password", capturedUser.getPasswordHash());
         assertNotEquals("password123", capturedUser.getPasswordHash());
         assertEquals(character, capturedUser.getCharacter1());
-        assertEquals("Master", capturedUser.getRank1());
+        assertEquals("MASTER", capturedUser.getRank1());
         assertEquals(1800, capturedUser.getMr1());
     }
 
     @Test
     void createUser_emailが既に登録されている場合_EmailAlreadyExistsExceptionを投げる() {
 
-        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "Master", 1800);
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "MASTER", 1800);
         UserCreateRequest request = new UserCreateRequest(
                 "user@example.com",
                 "password123",
@@ -129,8 +129,8 @@ class UserServiceTest {
     @Test
     void createUser_charactersに同じcharacterIdが複数指定された場合_InvalidRequestExceptionを投げる() {
 
-        UserCharacterRequest characterRequest1 = new UserCharacterRequest(1L, "Master", 1800);
-        UserCharacterRequest characterRequest2 = new UserCharacterRequest(1L, "Diamond", null);
+        UserCharacterRequest characterRequest1 = new UserCharacterRequest(1L, "MASTER", 1800);
+        UserCharacterRequest characterRequest2 = new UserCharacterRequest(1L, "DIAMOND", null);
         UserCreateRequest request = new UserCreateRequest(
                 "user@example.com",
                 "password123",
@@ -157,7 +157,7 @@ class UserServiceTest {
     @Test
     void createUser_指定したcharacterIdが存在しない場合_InvalidRequestExceptionを投げる() {
 
-        UserCharacterRequest characterRequest = new UserCharacterRequest(999L, "Master", 1800);
+        UserCharacterRequest characterRequest = new UserCharacterRequest(999L, "MASTER", 1800);
         UserCreateRequest request = new UserCreateRequest(
                 "user@example.com",
                 "password123",
@@ -177,6 +177,187 @@ class UserServiceTest {
 
         assertEquals("Character not found. character_id=999", exception.getMessage());
 
+        verify(passwordEncoder, never()).encode(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void createUser_rankとmrの許可された組み合わせの場合_正常に登録される() {
+
+        UserCharacterRequest characterRequest1 = new UserCharacterRequest(1L, "GOLD", null);
+        UserCharacterRequest characterRequest2 = new UserCharacterRequest(2L, "MASTER", null);
+        UserCharacterRequest characterRequest3 = new UserCharacterRequest(3L, "MASTER", 1600);
+        UserCreateRequest request = new UserCreateRequest(
+                "user@example.com",
+                "password123",
+                "Ryu",
+                List.of(characterRequest1, characterRequest2, characterRequest3),
+                LocalTime.of(18, 0),
+                LocalTime.of(23, 30),
+                "Hello, world!"
+        );
+
+        Character character1 = new Character(1L, "Ryu");
+        Character character2 = new Character(2L, "Ken");
+        Character character3 = new Character(3L, "Chun-Li");
+
+        when(userRepository.existsByEmail("user@example.com")).thenReturn(false);
+        when(characterRepository.findById(1L)).thenReturn(Optional.of(character1));
+        when(characterRepository.findById(2L)).thenReturn(Optional.of(character2));
+        when(characterRepository.findById(3L)).thenReturn(Optional.of(character3));
+        when(passwordEncoder.encode("password123")).thenReturn("hashed-password");
+
+        User savedUser = mock(User.class);
+        when(savedUser.getId()).thenReturn(1L);
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+
+        UserCreateResponse response = userService.createUser(request);
+
+        assertEquals(1L, response.id());
+
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository, times(1)).save(userCaptor.capture());
+
+        User capturedUser = userCaptor.getValue();
+        assertEquals("GOLD", capturedUser.getRank1());
+        assertEquals(null, capturedUser.getMr1());
+        assertEquals("MASTER", capturedUser.getRank2());
+        assertEquals(null, capturedUser.getMr2());
+        assertEquals("MASTER", capturedUser.getRank3());
+        assertEquals(1600, capturedUser.getMr3());
+    }
+
+    @Test
+    void createUser_rankがMASTER以外でmrが指定された場合_InvalidRequestExceptionを投げる() {
+
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "GOLD", 1600);
+        UserCreateRequest request = new UserCreateRequest(
+                "user@example.com",
+                "password123",
+                "Ryu",
+                List.of(characterRequest),
+                LocalTime.of(18, 0),
+                LocalTime.of(23, 30),
+                "Hello, world!"
+        );
+
+        when(userRepository.existsByEmail("user@example.com")).thenReturn(false);
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> userService.createUser(request));
+
+        assertEquals("mr must not be specified unless rank is MASTER. rank=GOLD", exception.getMessage());
+
+        verify(characterRepository, never()).findById(any());
+        verify(passwordEncoder, never()).encode(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void createUser_rankが許可値以外の場合_InvalidRequestExceptionを投げる() {
+
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "UNKNOWN", null);
+        UserCreateRequest request = new UserCreateRequest(
+                "user@example.com",
+                "password123",
+                "Ryu",
+                List.of(characterRequest),
+                LocalTime.of(18, 0),
+                LocalTime.of(23, 30),
+                "Hello, world!"
+        );
+
+        when(userRepository.existsByEmail("user@example.com")).thenReturn(false);
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> userService.createUser(request));
+
+        assertEquals("Invalid rank specified: UNKNOWN", exception.getMessage());
+
+        verify(characterRepository, never()).findById(any());
+        verify(passwordEncoder, never()).encode(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void createUser_rankがMASTERでmrが負の値の場合_InvalidRequestExceptionを投げる() {
+
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "MASTER", -1);
+        UserCreateRequest request = new UserCreateRequest(
+                "user@example.com",
+                "password123",
+                "Ryu",
+                List.of(characterRequest),
+                LocalTime.of(18, 0),
+                LocalTime.of(23, 30),
+                "Hello, world!"
+        );
+
+        when(userRepository.existsByEmail("user@example.com")).thenReturn(false);
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> userService.createUser(request));
+
+        assertEquals("mr must be 0 or greater. mr=-1", exception.getMessage());
+
+        verify(characterRepository, never()).findById(any());
+        verify(passwordEncoder, never()).encode(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void createUser_rankが空文字の場合_InvalidRequestExceptionを投げる() {
+
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "", null);
+        UserCreateRequest request = new UserCreateRequest(
+                "user@example.com",
+                "password123",
+                "Ryu",
+                List.of(characterRequest),
+                LocalTime.of(18, 0),
+                LocalTime.of(23, 30),
+                "Hello, world!"
+        );
+
+        when(userRepository.existsByEmail("user@example.com")).thenReturn(false);
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> userService.createUser(request));
+
+        assertEquals("Invalid rank specified: ", exception.getMessage());
+
+        verify(characterRepository, never()).findById(any());
+        verify(passwordEncoder, never()).encode(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void createUser_rankがnullの場合_InvalidRequestExceptionを投げる() {
+
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, null, null);
+        UserCreateRequest request = new UserCreateRequest(
+                "user@example.com",
+                "password123",
+                "Ryu",
+                List.of(characterRequest),
+                LocalTime.of(18, 0),
+                LocalTime.of(23, 30),
+                "Hello, world!"
+        );
+
+        when(userRepository.existsByEmail("user@example.com")).thenReturn(false);
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> userService.createUser(request));
+
+        assertEquals("Invalid rank specified: null", exception.getMessage());
+
+        verify(characterRepository, never()).findById(any());
         verify(passwordEncoder, never()).encode(any());
         verify(userRepository, never()).save(any());
     }
@@ -508,6 +689,156 @@ class UserServiceTest {
                 () -> userService.updateUser(1L, request));
 
         assertEquals("Character not found. character_id=999", exception.getMessage());
+        verify(user, never()).updateCharacters(any());
+    }
+
+    @Test
+    void updateUser_rankとmrの許可された組み合わせの場合_正常に更新する() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        Character character1 = new Character(1L, "Ryu");
+        Character character2 = new Character(2L, "Ken");
+        Character character3 = new Character(3L, "Chun-Li");
+        when(characterRepository.findById(1L)).thenReturn(Optional.of(character1));
+        when(characterRepository.findById(2L)).thenReturn(Optional.of(character2));
+        when(characterRepository.findById(3L)).thenReturn(Optional.of(character3));
+
+        UserCharacterRequest characterRequest1 = new UserCharacterRequest(1L, "GOLD", null);
+        UserCharacterRequest characterRequest2 = new UserCharacterRequest(2L, "MASTER", null);
+        UserCharacterRequest characterRequest3 = new UserCharacterRequest(3L, "MASTER", 1600);
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.of(List.of(characterRequest1, characterRequest2, characterRequest3)),
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined());
+
+        UserMeResponse response = userService.updateUser(1L, request);
+
+        assertNotNull(response);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<User.CharacterAssignment>> captor = ArgumentCaptor.forClass(List.class);
+        verify(user).updateCharacters(captor.capture());
+
+        List<User.CharacterAssignment> assignments = captor.getValue();
+        assertEquals(3, assignments.size());
+        assertEquals("GOLD", assignments.get(0).rank());
+        assertEquals(null, assignments.get(0).mr());
+        assertEquals("MASTER", assignments.get(1).rank());
+        assertEquals(null, assignments.get(1).mr());
+        assertEquals("MASTER", assignments.get(2).rank());
+        assertEquals(1600, assignments.get(2).mr());
+    }
+
+    @Test
+    void updateUser_rankがMASTER以外でmrが指定された場合_InvalidRequestExceptionを投げる() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "GOLD", 1600);
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.of(List.of(characterRequest)),
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined());
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> userService.updateUser(1L, request));
+
+        assertEquals("mr must not be specified unless rank is MASTER. rank=GOLD", exception.getMessage());
+        verify(characterRepository, never()).findById(any());
+        verify(user, never()).updateCharacters(any());
+    }
+
+    @Test
+    void updateUser_rankが許可値以外の場合_InvalidRequestExceptionを投げる() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "UNKNOWN", null);
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.of(List.of(characterRequest)),
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined());
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> userService.updateUser(1L, request));
+
+        assertEquals("Invalid rank specified: UNKNOWN", exception.getMessage());
+        verify(characterRepository, never()).findById(any());
+        verify(user, never()).updateCharacters(any());
+    }
+
+    @Test
+    void updateUser_rankがMASTERでmrが負の値の場合_InvalidRequestExceptionを投げる() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "MASTER", -1);
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.of(List.of(characterRequest)),
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined());
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> userService.updateUser(1L, request));
+
+        assertEquals("mr must be 0 or greater. mr=-1", exception.getMessage());
+        verify(characterRepository, never()).findById(any());
+        verify(user, never()).updateCharacters(any());
+    }
+
+    @Test
+    void updateUser_rankが空文字の場合_InvalidRequestExceptionを投げる() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, "", null);
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.of(List.of(characterRequest)),
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined());
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> userService.updateUser(1L, request));
+
+        assertEquals("Invalid rank specified: ", exception.getMessage());
+        verify(characterRepository, never()).findById(any());
+        verify(user, never()).updateCharacters(any());
+    }
+
+    @Test
+    void updateUser_rankがnullの場合_InvalidRequestExceptionを投げる() {
+
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserCharacterRequest characterRequest = new UserCharacterRequest(1L, null, null);
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.of(List.of(characterRequest)),
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.undefined());
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> userService.updateUser(1L, request));
+
+        assertEquals("Invalid rank specified: null", exception.getMessage());
+        verify(characterRepository, never()).findById(any());
         verify(user, never()).updateCharacters(any());
     }
 

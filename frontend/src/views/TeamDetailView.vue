@@ -4,14 +4,17 @@ import { useRoute, RouterLink } from 'vue-router'
 import axios from 'axios'
 import { fetchMyTeams, fetchTeamById, fetchTeamMembers } from '@/api/teams'
 import { fetchCharacters } from '@/api/characters'
+import { fetchTournamentById } from '@/api/tournaments'
 import { createApplication, fetchMyApplications } from '@/api/applications'
 import { useAuthStore } from '@/stores/auth'
+import { isRecruiting } from '@/utils/recruitmentStatus'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import LoadingState from '@/components/ui/LoadingState.vue'
 import ErrorState from '@/components/ui/ErrorState.vue'
 import type { Team, TeamMember } from '@/types/team'
 import type { Character } from '@/types/character'
+import type { Tournament } from '@/types/tournament'
 import type { RecruitmentApplication } from '@/types/recruitmentApplication'
 
 const route = useRoute()
@@ -28,6 +31,14 @@ const notFound = ref(false)
 // Team Detail本体はクラッシュさせず、事前判定なし(=既存どおりフォームを表示可能)として扱う。
 const myTeams = ref<Team[] | null>(null)
 const myApplications = ref<RecruitmentApplication[] | null>(null)
+
+// 募集期限はTeamではなくTournamentの責務のため、team.tournamentIdから別途取得する。
+// 取得に失敗した場合も、他の事前判定(myTeams/myApplications)と同じ考え方で
+// 「事前判定なし=募集中として扱い、最終判定はbackendの409に委ねる」方向にfail-openする。
+const tournament = ref<Tournament | null>(null)
+const recruitmentClosed = computed(
+  () => tournament.value !== null && !isRecruiting(tournament.value.recruitmentDeadline),
+)
 
 // フロント側のowner判定はUI制御のみ。実際の認可はPATCH /api/teams/{id}側で行われる。
 const isOwner = computed(() => team.value !== null && team.value.ownerId === authStore.user?.id)
@@ -69,6 +80,10 @@ async function loadTeam() {
     characterNames.value = new Map(charactersResult.map((character) => [character.id, character.name]))
     myTeams.value = myTeamsResult
     myApplications.value = myApplicationsResult
+
+    tournament.value = await fetchTournamentById(String(teamResult.tournamentId)).catch(
+      (): Tournament | null => null,
+    )
   } catch (e) {
     if (axios.isAxiosError(e) && e.response?.status === 404) {
       notFound.value = true
@@ -148,7 +163,8 @@ async function handleApply() {
     } else if (axios.isAxiosError(e) && e.response?.status === 404) {
       applicationError.value = '指定したチームが見つかりません'
     } else if (axios.isAxiosError(e) && e.response?.status === 409) {
-      applicationError.value = 'この大会では既にチームに所属しているか、申請中です'
+      applicationError.value =
+        'この大会では既にチームに所属しているか、申請中、または募集が終了している可能性があります'
     } else {
       applicationError.value = '参加申請に失敗しました'
     }
@@ -237,6 +253,9 @@ async function handleApply() {
             class="team-detail-view__status-card"
           >
             <p>このチームへの参加申請は受付済みです</p>
+          </BaseCard>
+          <BaseCard v-else-if="recruitmentClosed" class="team-detail-view__status-card">
+            <p>この大会のチーム募集は終了しました</p>
           </BaseCard>
           <BaseCard v-else class="team-detail-view__application">
             <template v-if="applicationSubmitted">

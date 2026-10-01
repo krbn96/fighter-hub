@@ -6,6 +6,7 @@ import TeamDetailView from '../TeamDetailView.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { Team, TeamMember } from '@/types/team'
 import type { Character } from '@/types/character'
+import type { Tournament } from '@/types/tournament'
 import type { RecruitmentApplication } from '@/types/recruitmentApplication'
 import type { UserMe } from '@/types/user'
 
@@ -17,6 +18,10 @@ vi.mock('@/api/teams', () => ({
 
 vi.mock('@/api/characters', () => ({
   fetchCharacters: vi.fn<() => Promise<Character[]>>(),
+}))
+
+vi.mock('@/api/tournaments', () => ({
+  fetchTournamentById: vi.fn<(id: string) => Promise<Tournament>>(),
 }))
 
 vi.mock('@/api/applications', () => ({
@@ -36,6 +41,7 @@ vi.mock('vue-router', async (importOriginal) => {
 
 import { fetchMyTeams, fetchTeamById, fetchTeamMembers } from '@/api/teams'
 import { fetchCharacters } from '@/api/characters'
+import { fetchTournamentById } from '@/api/tournaments'
 import { createApplication, fetchMyApplications } from '@/api/applications'
 
 const sampleTeam: Team = {
@@ -60,6 +66,18 @@ const sampleCharacters: Character[] = [
   { id: 1, name: 'RYU' },
   { id: 2, name: 'KEN' },
 ]
+
+const sampleTournament: Tournament = {
+  id: sampleTeam.tournamentId,
+  name: sampleTeam.tournamentName,
+  teamSize: 3,
+  startAt: '2099-12-20T13:00:00',
+  recruitmentDeadline: '2099-12-15T23:59:00',
+  maxPlayers: 64,
+  status: 'OPEN',
+  createdAt: '2026-09-01T00:00:00',
+  updatedAt: '2026-09-01T00:00:00',
+}
 
 function createUserMe(id: number): UserMe {
   return {
@@ -91,6 +109,8 @@ describe('TeamDetailView', () => {
     vi.mocked(fetchMyTeams).mockResolvedValue([])
     vi.mocked(fetchMyApplications).mockReset()
     vi.mocked(fetchMyApplications).mockResolvedValue([])
+    vi.mocked(fetchTournamentById).mockReset()
+    vi.mocked(fetchTournamentById).mockResolvedValue(sampleTournament)
   })
 
   it('API取得成功時にチーム詳細が表示される(募集キャラクターはCharacter Nameで表示される)', async () => {
@@ -449,7 +469,7 @@ describe('TeamDetailView', () => {
     expect(wrapper.text()).toContain('メンバー情報がありません')
   })
 
-  it('参加申請409時に専用メッセージが表示される', async () => {
+  it('参加申請409時に汎用メッセージ(所属済み/申請中/募集終了の可能性)が表示される', async () => {
     const authStore = useAuthStore()
     authStore.token = 'dummy-token'
     authStore.user = createUserMe(sampleTeam.ownerId + 999)
@@ -468,6 +488,64 @@ describe('TeamDetailView', () => {
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('この大会では既にチームに所属しているか、申請中です')
+    expect(wrapper.text()).toContain(
+      'この大会では既にチームに所属しているか、申請中、または募集が終了している可能性があります',
+    )
+  })
+
+  it('募集締切前はapplication formが表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+    authStore.user = createUserMe(sampleTeam.ownerId + 999)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(fetchTournamentById).toHaveBeenCalledWith(String(sampleTeam.tournamentId))
+    expect(wrapper.find('form').exists()).toBe(true)
+  })
+
+  it('募集締切後はapplication formを表示せず案内メッセージへ差し替える', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+    authStore.user = createUserMe(sampleTeam.ownerId + 999)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTournamentById).mockResolvedValue({
+      ...sampleTournament,
+      recruitmentDeadline: '2020-01-01T00:00:00',
+    })
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.text()).toContain('この大会のチーム募集は終了しました')
+    // Team/Members等の閲覧は締切後も可能。
+    expect(wrapper.text()).toContain('Team Ryu')
+    expect(wrapper.text()).toContain('MEMBERS (1)')
+  })
+
+  it('Tournament取得に失敗してもTeam Detail本体は表示され、応募フォームは利用可能なままになる', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+    authStore.user = createUserMe(sampleTeam.ownerId + 999)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+    vi.mocked(fetchTournamentById).mockRejectedValue(new Error('network error'))
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Team Ryu')
+    expect(wrapper.find('form').exists()).toBe(true)
   })
 })

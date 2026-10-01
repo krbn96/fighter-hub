@@ -324,6 +324,7 @@ class RecruitmentApplicationRepositoryTest {
                 "Test Cup " + UUID.randomUUID(),
                 3,
                 LocalDateTime.now(),
+                LocalDateTime.now().minusDays(1),
                 24,
                 "OPEN"
         ));

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 
 import TeamCreateView from '../TeamCreateView.vue'
 import type { Character } from '@/types/character'
+import type { Tournament } from '@/types/tournament'
 import type { TeamCreateRequest, TeamCreateResponse } from '@/types/team'
 
 vi.mock('@/api/teams', () => ({
@@ -11,6 +12,10 @@ vi.mock('@/api/teams', () => ({
 
 vi.mock('@/api/characters', () => ({
   fetchCharacters: vi.fn<() => Promise<Character[]>>(),
+}))
+
+vi.mock('@/api/tournaments', () => ({
+  fetchTournamentById: vi.fn<(id: string) => Promise<Tournament>>(),
 }))
 
 const push = vi.fn<(path: string) => void>()
@@ -26,11 +31,24 @@ vi.mock('vue-router', async (importOriginal) => {
 
 import { createTeam } from '@/api/teams'
 import { fetchCharacters } from '@/api/characters'
+import { fetchTournamentById } from '@/api/tournaments'
 
 const sampleCharacters: Character[] = [
   { id: 1, name: 'Ryu' },
   { id: 2, name: 'Ken' },
 ]
+
+const sampleTournament: Tournament = {
+  id: 1,
+  name: 'STREET FIGHTER 6 CUP',
+  teamSize: 3,
+  startAt: '2099-12-20T13:00:00',
+  recruitmentDeadline: '2099-12-15T23:59:00',
+  maxPlayers: 64,
+  status: 'OPEN',
+  createdAt: '2026-09-01T00:00:00',
+  updatedAt: '2026-09-01T00:00:00',
+}
 
 describe('TeamCreateView', () => {
   beforeEach(() => {
@@ -38,6 +56,8 @@ describe('TeamCreateView', () => {
     push.mockReset()
     vi.mocked(fetchCharacters).mockReset()
     vi.mocked(fetchCharacters).mockResolvedValue(sampleCharacters)
+    vi.mocked(fetchTournamentById).mockReset()
+    vi.mocked(fetchTournamentById).mockResolvedValue(sampleTournament)
   })
 
   it('fetchCharacters()でCharacter一覧を取得する', async () => {
@@ -137,7 +157,7 @@ describe('TeamCreateView', () => {
     )
   })
 
-  it('409時に「この大会では既にチームに所属しています」が表示される', async () => {
+  it('409時に汎用メッセージ(所属済み/募集終了の可能性)が表示される', async () => {
     vi.mocked(createTeam).mockRejectedValue({
       isAxiosError: true,
       response: { status: 409 },
@@ -150,7 +170,9 @@ describe('TeamCreateView', () => {
     await wrapper.find('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('この大会では既にチームに所属しています')
+    expect(wrapper.text()).toContain(
+      'この大会では既にチームに所属しているか、募集が終了している可能性があります',
+    )
   })
 
   it('CANCELボタンで大会詳細(/tournaments/{tournamentId})へ戻る', async () => {
@@ -161,5 +183,36 @@ describe('TeamCreateView', () => {
 
     expect(push).toHaveBeenCalledWith('/tournaments/1')
     expect(createTeam).not.toHaveBeenCalled()
+  })
+
+  it('募集締切前はTeamFormが表示される', async () => {
+    const wrapper = mount(TeamCreateView)
+    await flushPromises()
+
+    expect(wrapper.find('form').exists()).toBe(true)
+  })
+
+  it('募集締切後はTeamFormを表示せず案内メッセージを表示する', async () => {
+    vi.mocked(fetchTournamentById).mockResolvedValue({
+      ...sampleTournament,
+      recruitmentDeadline: '2020-01-01T00:00:00',
+    })
+
+    const wrapper = mount(TeamCreateView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.text()).toContain('この大会のチーム募集は終了しました')
+  })
+
+  it('Tournament取得に失敗してもフォームは表示される(最終判定はbackendの409に委ねる)', async () => {
+    vi.mocked(fetchTournamentById).mockRejectedValue(new Error('network error'))
+
+    const wrapper = mount(TeamCreateView)
+    await flushPromises()
+
+    expect(wrapper.find('form').exists()).toBe(true)
   })
 })

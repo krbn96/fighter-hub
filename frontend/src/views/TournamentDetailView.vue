@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import axios from 'axios'
 import { fetchTournamentById } from '@/api/tournaments'
 import { formatDateTime } from '@/utils/formatDateTime'
 import { formatTeamSize } from '@/utils/formatTeamSize'
+import { getRecruitmentStatus, isRecruiting } from '@/utils/recruitmentStatus'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
@@ -18,6 +19,12 @@ const tournament = ref<Tournament | null>(null)
 const loading = ref(false)
 const error = ref('')
 const notFound = ref(false)
+
+// 募集状態はbackendのstatusではなくrecruitmentDeadlineから導出する。
+const recruitmentStatus = computed(() =>
+  tournament.value ? getRecruitmentStatus(tournament.value.recruitmentDeadline) : null,
+)
+const recruiting = computed(() => tournament.value !== null && isRecruiting(tournament.value.recruitmentDeadline))
 
 async function loadTournament() {
   loading.value = true
@@ -55,10 +62,16 @@ onMounted(loadTournament)
       <template v-else-if="tournament">
         <header class="tournament-detail-view__header">
           <h1>{{ tournament.name }}</h1>
-          <StatusBadge :status="tournament.status" />
+          <StatusBadge :status="recruitmentStatus!" />
         </header>
 
         <div class="tournament-detail-view__meta">
+          <div class="tournament-detail-view__meta-item">
+            <span class="tournament-detail-view__meta-label">RECRUITMENT DEADLINE</span>
+            <span class="tournament-detail-view__meta-value">{{
+              formatDateTime(tournament.recruitmentDeadline)
+            }}</span>
+          </div>
           <div class="tournament-detail-view__meta-item">
             <span class="tournament-detail-view__meta-label">Start</span>
             <span class="tournament-detail-view__meta-value">{{
@@ -83,9 +96,13 @@ onMounted(loadTournament)
             <BaseCard class="tournament-detail-view__action-card">
               <h3>チームを作る</h3>
               <p>新しいチームを作って、メンバーを募集する。</p>
-              <BaseButton :to="`/tournaments/${tournament.id}/teams/create`"
+              <BaseButton v-if="recruiting" :to="`/tournaments/${tournament.id}/teams/create`"
                 >CREATE TEAM</BaseButton
               >
+              <template v-else>
+                <BaseButton disabled>CREATE TEAM</BaseButton>
+                <p class="tournament-detail-view__closed-reason">チーム募集は終了しました</p>
+              </template>
             </BaseCard>
             <BaseCard class="tournament-detail-view__action-card">
               <h3>チームを探す</h3>
@@ -168,6 +185,12 @@ onMounted(loadTournament)
 .tournament-detail-view__action-card p {
   color: var(--color-text-secondary);
   font-size: 0.9rem;
+}
+
+.tournament-detail-view__closed-reason {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
 }
 
 @media (min-width: 768px) {

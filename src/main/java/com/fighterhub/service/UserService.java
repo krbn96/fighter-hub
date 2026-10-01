@@ -27,6 +27,13 @@ import com.fighterhub.repository.UserRepository;
 @Service
 public class UserService {
 
+    // frontend/src/constants/ranks.tsのRANK_OPTIONSと同じ8値(正式business rule)。
+    // rankは自由文字列として保存されているため、ここでbackend側の許容値として明示的に検証する。
+    private static final Set<String> ALLOWED_RANKS = Set.of(
+            "ROOKIE", "IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "MASTER");
+
+    private static final String MASTER_RANK = "MASTER";
+
     private final UserRepository userRepository;
     private final CharacterRepository characterRepository;
     private final PasswordEncoder passwordEncoder;
@@ -135,6 +142,8 @@ public class UserService {
                 throw new InvalidRequestException(
                         "Duplicate character_id specified: " + characterId);
             }
+
+            validateRankAndMr(characterRequest.rank(), characterRequest.mr());
         }
 
         List<User.CharacterAssignment> characterAssignments = new ArrayList<>();
@@ -153,6 +162,29 @@ public class UserService {
         }
 
         return characterAssignments;
+    }
+
+    // 正式business rule(frontendのRANK_OPTIONS/MASTERのみMR入力可能という仕様をbackendでも強制する):
+    // - rankはALLOWED_RANKSのいずれかであること(null/blankは@NotBlankで別途拒否される)
+    // - rankがMASTER以外の場合、mrはnull以外を指定できない
+    // - rankがMASTERの場合、mrはnullを許可し、null以外なら0以上であること
+    // - mrの上限はInteger型の範囲に委ね、独自の上限チェックは追加しない
+    private void validateRankAndMr(String rank, Integer mr) {
+        if (rank == null || !ALLOWED_RANKS.contains(rank)) {
+            throw new InvalidRequestException("Invalid rank specified: " + rank);
+        }
+
+        if (!MASTER_RANK.equals(rank)) {
+            if (mr != null) {
+                throw new InvalidRequestException(
+                        "mr must not be specified unless rank is MASTER. rank=" + rank);
+            }
+            return;
+        }
+
+        if (mr != null && mr < 0) {
+            throw new InvalidRequestException("mr must be 0 or greater. mr=" + mr);
+        }
     }
 
     private UserPublicResponse toUserPublicResponse(User user) {

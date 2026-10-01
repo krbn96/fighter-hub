@@ -300,7 +300,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
         '409':
-          description: 同一Tournament内ですでにいずれかのTeamへ所属している
+          description: >-
+            同一Tournament内ですでにいずれかのTeamへ所属している、または対象Tournamentの
+            募集締切(recruitmentDeadline)を過ぎている(締切ちょうども含む)。
           content:
             application/json:
               schema:
@@ -873,7 +875,10 @@ paths:
                 path: /api/teams/999/applications
 
         '409':
-          description: 同一大会内ですでにいずれかのチームへ所属している、または同一大会内にPENDING状態の申請がすでに存在する
+          description: >-
+            同一大会内ですでにいずれかのチームへ所属している、同一大会内にPENDING状態の申請が
+            すでに存在する、または対象Tournamentの募集締切(recruitmentDeadline)を過ぎている
+            (締切ちょうども含む)。
           content:
             application/json:
               schema:
@@ -1693,6 +1698,7 @@ components:
         - name
         - teamSize
         - startAt
+        - recruitmentDeadline
         - maxPlayers
         - status
         - createdAt
@@ -1716,13 +1722,22 @@ components:
           format: date-time
           description: 大会開始日時
           example: "2026-10-01T19:00:00"
+        recruitmentDeadline:
+          type: string
+          format: date-time
+          description: >-
+            FIGHTER HUB上でのチーム募集・参加申請の締切日時。recruitmentDeadline must be before
+            startAt(startAtと同時刻は不可)。募集状態(RECRUITING/CLOSED)はDBへ保存せず、
+            現在時刻とこの値から導出する(now < recruitmentDeadlineならRECRUITING、
+            now >= recruitmentDeadline(ちょうど含む)ならCLOSED)。
+          example: "2026-09-25T23:59:00"
         maxPlayers:
           type: integer
           description: 大会の最大参加人数
           example: 64
         status:
           type: string
-          description: 大会ステータス
+          description: 大会ステータス(自由文字列)。将来的に削除予定であり、募集状態の判定には使用しない(recruitmentDeadlineを参照すること)。
           example: OPEN
         createdAt:
           type: string
@@ -1740,6 +1755,7 @@ components:
         - name
         - teamSize
         - startAt
+        - recruitmentDeadline
         - maxPlayers
         - status
       properties:
@@ -1757,6 +1773,13 @@ components:
           format: date-time
           description: 大会開始日時
           example: "2026-10-01T19:00:00"
+        recruitmentDeadline:
+          type: string
+          format: date-time
+          description: >-
+            FIGHTER HUB上でのチーム募集・参加申請の締切日時。recruitmentDeadline must be before
+            startAt(startAtと同時刻は不可。違反時は400 InvalidRequestException)。
+          example: "2026-09-25T23:59:00"
         maxPlayers:
           type: integer
           minimum: 1
@@ -1784,6 +1807,14 @@ components:
           format: date-time
           description: 大会開始日時
           example: "2026-10-01T19:00:00"
+        recruitmentDeadline:
+          type: string
+          format: date-time
+          description: >-
+            FIGHTER HUB上でのチーム募集・参加申請の締切日時（指定する場合）。recruitmentDeadline must be
+            before startAt(更新適用後の実効値で検証される。startAtのみ変更した場合でも、
+            既存recruitmentDeadlineとの関係が不正になれば400になる)。
+          example: "2026-09-25T23:59:00"
         maxPlayers:
           type: integer
           minimum: 1

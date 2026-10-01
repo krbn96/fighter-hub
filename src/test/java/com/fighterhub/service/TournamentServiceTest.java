@@ -29,6 +29,7 @@ import com.fighterhub.dto.TournamentUpdateRequest;
 import com.fighterhub.entity.Tournament;
 import com.fighterhub.entity.User;
 import com.fighterhub.entity.UserRole;
+import com.fighterhub.exception.InvalidRequestException;
 import com.fighterhub.exception.NotAdminException;
 import com.fighterhub.exception.TournamentNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
@@ -54,11 +55,15 @@ class TournamentServiceTest {
         return user;
     }
 
+    private static final LocalDateTime SAMPLE_START_AT = LocalDateTime.of(2026, 10, 1, 19, 0);
+    private static final LocalDateTime SAMPLE_RECRUITMENT_DEADLINE = LocalDateTime.of(2026, 9, 30, 23, 59);
+
     private static TournamentCreateRequest sampleCreateRequest() {
         return new TournamentCreateRequest(
                 "STREET FIGHTER 6 CUP",
                 3,
-                LocalDateTime.of(2026, 10, 1, 19, 0),
+                SAMPLE_START_AT,
+                SAMPLE_RECRUITMENT_DEADLINE,
                 64,
                 "OPEN"
         );
@@ -68,22 +73,22 @@ class TournamentServiceTest {
         return new TournamentUpdateRequest(
                 JsonNullable.undefined(), JsonNullable.undefined(),
                 JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined());
     }
 
     private Tournament newRealTournament() {
         return Tournament.create(
-                "STREET FIGHTER 6 CUP", 3, LocalDateTime.of(2026, 10, 1, 19, 0), 64, "OPEN");
+                "STREET FIGHTER 6 CUP", 3, SAMPLE_START_AT, SAMPLE_RECRUITMENT_DEADLINE, 64, "OPEN");
     }
 
     private Tournament mockTournament() {
         Tournament tournament = mock(Tournament.class);
         LocalDateTime now = LocalDateTime.of(2026, 1, 1, 0, 0);
-        LocalDateTime startAt = LocalDateTime.of(2026, 10, 1, 19, 0);
         when(tournament.getId()).thenReturn(1L);
         when(tournament.getName()).thenReturn("STREET FIGHTER 6 CUP");
         when(tournament.getTeamSize()).thenReturn(3);
-        when(tournament.getStartAt()).thenReturn(startAt);
+        when(tournament.getStartAt()).thenReturn(SAMPLE_START_AT);
+        when(tournament.getRecruitmentDeadline()).thenReturn(SAMPLE_RECRUITMENT_DEADLINE);
         when(tournament.getMaxPlayers()).thenReturn(64);
         when(tournament.getStatus()).thenReturn("OPEN");
         when(tournament.getCreatedAt()).thenReturn(now);
@@ -147,6 +152,8 @@ class TournamentServiceTest {
         assertEquals(1L, response.id());
         assertEquals("STREET FIGHTER 6 CUP", response.name());
         assertEquals(3, response.teamSize());
+        assertEquals(SAMPLE_START_AT, response.startAt());
+        assertEquals(SAMPLE_RECRUITMENT_DEADLINE, response.recruitmentDeadline());
         assertEquals(64, response.maxPlayers());
         assertEquals("OPEN", response.status());
 
@@ -154,6 +161,7 @@ class TournamentServiceTest {
         verify(tournamentRepository, times(1)).save(tournamentCaptor.capture());
         assertEquals("STREET FIGHTER 6 CUP", tournamentCaptor.getValue().getName());
         assertEquals(3, tournamentCaptor.getValue().getTeamSize());
+        assertEquals(SAMPLE_RECRUITMENT_DEADLINE, tournamentCaptor.getValue().getRecruitmentDeadline());
         assertEquals(64, tournamentCaptor.getValue().getMaxPlayers());
         assertEquals("OPEN", tournamentCaptor.getValue().getStatus());
     }
@@ -181,6 +189,38 @@ class TournamentServiceTest {
         verify(tournamentRepository, never()).save(any());
     }
 
+    // 正式business rule: recruitmentDeadline < startAt(同時刻不可)。
+    @Test
+    void createTournament_recruitmentDeadlineがstartAtと同時刻の場合_InvalidRequestExceptionを投げsaveは呼ばれない() {
+        User admin = mockUser(UserRole.ADMIN);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(admin));
+
+        TournamentCreateRequest request = new TournamentCreateRequest(
+                "STREET FIGHTER 6 CUP", 3, SAMPLE_START_AT, SAMPLE_START_AT, 64, "OPEN");
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> tournamentService.createTournament(1L, request));
+
+        assertEquals("recruitmentDeadline must be before startAt", exception.getMessage());
+        verify(tournamentRepository, never()).save(any());
+    }
+
+    @Test
+    void createTournament_recruitmentDeadlineがstartAtより後の場合_InvalidRequestExceptionを投げsaveは呼ばれない() {
+        User admin = mockUser(UserRole.ADMIN);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(admin));
+
+        TournamentCreateRequest request = new TournamentCreateRequest(
+                "STREET FIGHTER 6 CUP", 3, SAMPLE_START_AT, SAMPLE_START_AT.plusMinutes(1), 64, "OPEN");
+
+        assertThrows(
+                InvalidRequestException.class,
+                () -> tournamentService.createTournament(1L, request));
+
+        verify(tournamentRepository, never()).save(any());
+    }
+
     @Test
     void updateTournament_ADMINなら指定フィールドを更新でき未指定フィールドは変更されない() {
         User admin = mockUser(UserRole.ADMIN);
@@ -194,6 +234,7 @@ class TournamentServiceTest {
                 JsonNullable.undefined(),
                 JsonNullable.undefined(),
                 JsonNullable.undefined(),
+                JsonNullable.undefined(),
                 JsonNullable.undefined()
         );
 
@@ -202,6 +243,8 @@ class TournamentServiceTest {
         assertEquals("New Cup Name", response.name());
         // 未指定フィールドは変更されない。
         assertEquals(3, response.teamSize());
+        assertEquals(SAMPLE_START_AT, response.startAt());
+        assertEquals(SAMPLE_RECRUITMENT_DEADLINE, response.recruitmentDeadline());
         assertEquals(64, response.maxPlayers());
         assertEquals("OPEN", response.status());
         verify(tournamentRepository, times(1)).flush();
@@ -231,6 +274,88 @@ class TournamentServiceTest {
                 () -> tournamentService.updateTournament(1L, 999L, allUndefinedUpdateRequest()));
 
         verify(tournamentRepository, never()).flush();
+    }
+
+    // 正式business rule: PATCHでは「更新適用後のTournamentの実効値」で
+    // recruitmentDeadline < startAtを検証する(requestの生の値同士だけを比較してはいけない)。
+    @Test
+    void updateTournament_startAtのみ変更して既存recruitmentDeadline基準で不正になる場合_InvalidRequestExceptionを投げる() {
+        User admin = mockUser(UserRole.ADMIN);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(admin));
+
+        // 既存: startAt=2026-10-01T19:00, recruitmentDeadline=2026-09-30T23:59。
+        Tournament tournament = newRealTournament();
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(100L)).thenReturn(Optional.of(tournament));
+
+        // startAtだけを既存recruitmentDeadlineより前(2026-09-30T00:00)へ変更すると不正になる。
+        TournamentUpdateRequest request = new TournamentUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.of(LocalDateTime.of(2026, 9, 30, 0, 0)),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined()
+        );
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> tournamentService.updateTournament(1L, 100L, request));
+
+        assertEquals("recruitmentDeadline must be before startAt", exception.getMessage());
+        verify(tournamentRepository, never()).flush();
+    }
+
+    @Test
+    void updateTournament_recruitmentDeadlineのみ変更して既存startAt基準で不正になる場合_InvalidRequestExceptionを投げる() {
+        User admin = mockUser(UserRole.ADMIN);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(admin));
+
+        // 既存: startAt=2026-10-01T19:00。
+        Tournament tournament = newRealTournament();
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(100L)).thenReturn(Optional.of(tournament));
+
+        // recruitmentDeadlineだけを既存startAtより後(2026-10-02T00:00)へ変更すると不正になる。
+        TournamentUpdateRequest request = new TournamentUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.of(LocalDateTime.of(2026, 10, 2, 0, 0)),
+                JsonNullable.undefined(),
+                JsonNullable.undefined()
+        );
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> tournamentService.updateTournament(1L, 100L, request));
+
+        assertEquals("recruitmentDeadline must be before startAt", exception.getMessage());
+        verify(tournamentRepository, never()).flush();
+    }
+
+    @Test
+    void updateTournament_startAtとrecruitmentDeadlineの両方を変更して正常になる場合_更新できる() {
+        User admin = mockUser(UserRole.ADMIN);
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(admin));
+
+        Tournament tournament = newRealTournament();
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(100L)).thenReturn(Optional.of(tournament));
+
+        LocalDateTime newStartAt = LocalDateTime.of(2026, 11, 1, 19, 0);
+        LocalDateTime newDeadline = LocalDateTime.of(2026, 10, 31, 23, 59);
+        TournamentUpdateRequest request = new TournamentUpdateRequest(
+                JsonNullable.undefined(),
+                JsonNullable.undefined(),
+                JsonNullable.of(newStartAt),
+                JsonNullable.of(newDeadline),
+                JsonNullable.undefined(),
+                JsonNullable.undefined()
+        );
+
+        TournamentResponse response = tournamentService.updateTournament(1L, 100L, request);
+
+        assertEquals(newStartAt, response.startAt());
+        assertEquals(newDeadline, response.recruitmentDeadline());
+        verify(tournamentRepository, times(1)).flush();
     }
 
     @Test

@@ -18,6 +18,9 @@ public record TournamentCreateRequest(
     LocalDateTime startAt,
 
     @NotNull
+    LocalDateTime recruitmentDeadline,
+
+    @NotNull
     @Positive
     Integer maxPlayers,
 

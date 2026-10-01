@@ -36,6 +36,7 @@ import com.fighterhub.entity.Team;
 import com.fighterhub.entity.TeamMember;
 import com.fighterhub.entity.Tournament;
 import com.fighterhub.entity.User;
+import com.fighterhub.exception.ApplicationAlreadyProcessedException;
 import com.fighterhub.exception.DuplicatePendingApplicationException;
 import com.fighterhub.exception.TeamFullException;
 import com.fighterhub.repository.CharacterRepository;
@@ -212,6 +213,102 @@ class RecruitmentApplicationConcurrencyTest {
                 .forEach(member -> createdTeamMemberIds.add(member.getId()));
     }
 
+    // シナリオC: 同一Userが同一Tournament内の異なるTeam(A/B)へそれぞれPENDING申請を持つ状態で、
+    // Team A ownerとTeam B ownerがほぼ同時にapproveする。
+    //
+    // 旧実装(対象Applicationを先にfindByIdForUpdateで単独ロック→他PENDINGを別クエリで
+    // 後からロック)では、T1がA を保持したままB を待ち、T2がB を保持したままA を待つ、
+    // という循環待ち(deadlock)が理論上起こり得た。
+    // 対象+他PENDINGをID昇順で1クエリにまとめてロックする現在の実装(
+    // findTargetAndPendingForUpdateOrderById)では、両TransactionがA,Bを必ず同じ順序で
+    // ロックしようとするため、片方が完全にロックを獲得してからもう片方が進む形に直列化され、
+    // deadlockは起こり得ない。
+    //
+    // 期待する結果:
+    // - deadlockしない(Future#get()がtimeoutせず、PessimisticLockingFailureException等の
+    //   想定外の例外にもならない)
+    // - 500にならない(countConflictsがApplicationAlreadyProcessedException以外を検出すれば
+    //   assertInstanceOfで即座に失敗する)
+    // - 一方のApplicationのみAPPROVED、もう一方は自動REJECTED後の再approveとして
+    //   ApplicationAlreadyProcessedExceptionになる
+    // - 最終的にUserは1 Teamだけに所属し、duplicate membershipは発生しない
+    @Test
+    void approveApplication_同一Userの異なるTeamへのPENDING申請を異なるOwnerが同時approveした場合_deadlockせず片方だけAPPROVEDになりもう片方はREJECTEDされる()
+            throws Exception {
+        Long characterId = anyExistingCharacterId();
+        User ownerA = createUser(characterId);
+        User ownerB = createUser(characterId);
+        User applicant = createUser(characterId);
+        Tournament tournament = createTournament(2);
+        Team teamA = createTeam(tournament, ownerA);
+        Team teamB = createTeam(tournament, ownerB);
+        createTeamMember(teamA, ownerA);
+        createTeamMember(teamB, ownerB);
+
+        RecruitmentApplication applicationToA = createPendingApplication(teamA, applicant);
+        RecruitmentApplication applicationToB = createPendingApplication(teamB, applicant);
+
+        CountDownLatch readyLatch = new CountDownLatch(2);
+        CountDownLatch startSignal = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Callable<Object> approveTaskA = approveApplicationTask(
+                    ownerA.getId(), teamA.getId(), applicationToA.getId(), readyLatch, startSignal);
+            Callable<Object> approveTaskB = approveApplicationTask(
+                    ownerB.getId(), teamB.getId(), applicationToB.getId(), readyLatch, startSignal);
+
+            Future<Object> futureA = executor.submit(approveTaskA);
+            Future<Object> futureB = executor.submit(approveTaskB);
+
+            assertTrue(readyLatch.await(10, TimeUnit.SECONDS));
+            startSignal.countDown();
+
+            // deadlockしていればここでTimeoutExceptionになる(無限待機しない)。
+            Object resultA = futureA.get(10, TimeUnit.SECONDS);
+            Object resultB = futureB.get(10, TimeUnit.SECONDS);
+
+            int successCount = countSuccesses(resultA, resultB);
+            // ApplicationAlreadyProcessedException以外の例外(deadlock由来の
+            // CannotAcquireLockException等を含む)が発生した場合はここでassertInstanceOfが失敗する。
+            int conflictCount = countConflicts(resultA, resultB, ApplicationAlreadyProcessedException.class);
+
+            assertEquals(1, successCount, "片方だけAPPROVEDになっているはず");
+            assertEquals(1, conflictCount,
+                    "もう片方はApplicationAlreadyProcessedExceptionになるはず(自動REJECTED後の再approve)");
+        } finally {
+            executor.shutdownNow();
+        }
+
+        RecruitmentApplication refreshedToA =
+                recruitmentApplicationRepository.findById(applicationToA.getId()).orElseThrow();
+        RecruitmentApplication refreshedToB =
+                recruitmentApplicationRepository.findById(applicationToB.getId()).orElseThrow();
+
+        int approvedCount = 0;
+        int rejectedCount = 0;
+        for (RecruitmentApplicationStatus status : List.of(refreshedToA.getStatus(), refreshedToB.getStatus())) {
+            if (status == RecruitmentApplicationStatus.APPROVED) {
+                approvedCount++;
+            }
+            if (status == RecruitmentApplicationStatus.REJECTED) {
+                rejectedCount++;
+            }
+        }
+        assertEquals(1, approvedCount, "一方のApplicationのみAPPROVEDであるはず");
+        assertEquals(1, rejectedCount, "もう一方のApplicationはREJECTEDであるはず");
+
+        // OSIV無効のため、team.getId()(識別子のみ)はセッション外でも取得できる範囲に留める。
+        long membershipCount = teamMemberRepository.findActiveTeamMembershipsByUserId(applicant.getId()).stream()
+                .filter(tm -> tm.getTeam().getId().equals(teamA.getId()) || tm.getTeam().getId().equals(teamB.getId()))
+                .count();
+        assertEquals(1, membershipCount, "最終的にUserは1 Teamだけに所属しているはず(duplicate membershipが発生していない)");
+
+        // approveの成功で新規作成されたTeamMember(承認された側)をcleanUp対象へ登録する。
+        teamMemberRepository.findActiveTeamMembershipsByUserId(applicant.getId()).stream()
+                .filter(tm -> tm.getTeam().getId().equals(teamA.getId()) || tm.getTeam().getId().equals(teamB.getId()))
+                .forEach(tm -> createdTeamMemberIds.add(tm.getId()));
+    }
+
     private Callable<Object> createApplicationTask(
             Long userId, Long teamId, CountDownLatch readyLatch, CountDownLatch startSignal) {
         return () -> {
@@ -286,10 +383,13 @@ class RecruitmentApplicationConcurrencyTest {
     }
 
     private Tournament createTournament(int teamSize) {
+        // createApplication/createTeamが実Serviceを通る(募集締切チェックが働く)ため、
+        // recruitmentDeadlineはテスト実行時点より確実に未来(かつstartAtより前)にしておく。
         Tournament tournament = tournamentRepository.save(Tournament.create(
                 "Concurrency Test Cup " + UUID.randomUUID(),
                 teamSize,
-                LocalDateTime.now(),
+                LocalDateTime.now().plusDays(2),
+                LocalDateTime.now().plusDays(1),
                 24,
                 "OPEN"
         ));

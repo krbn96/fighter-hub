@@ -44,6 +44,9 @@ FIGHTER HUBでは、大会ごとにチームを作成してメンバーを募集
 - 大会一覧取得・大会詳細取得
 - ADMINユーザーによる大会作成・更新・論理削除（ADMIN判定はDB上のUser.roleを基準とする認可）
 - 大会ごとのチーム一覧取得
+- Tournamentに募集締切日時（recruitmentDeadline）を設定（recruitmentDeadline < startAt）
+- 募集締切後の新規チーム作成・新規参加申請の禁止（締切後も既存PENDING申請の承認・拒否は可能）
+- 募集状態（RECRUITING/CLOSED）はDBへ保存せず、recruitmentDeadlineと現在時刻から導出
 - Swagger UIによるAPI仕様の確認（Bearer認証対応）
 - 共通エラーハンドリング
 

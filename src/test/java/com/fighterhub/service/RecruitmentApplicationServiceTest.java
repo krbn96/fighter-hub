@@ -9,14 +9,19 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -39,6 +44,7 @@ import com.fighterhub.exception.DuplicatePendingApplicationException;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
 import com.fighterhub.exception.NotTeamOwnerException;
 import com.fighterhub.exception.RecruitmentApplicationNotFoundException;
+import com.fighterhub.exception.RecruitmentClosedException;
 import com.fighterhub.exception.TeamFullException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.repository.RecruitmentApplicationRepository;
@@ -61,8 +67,20 @@ class RecruitmentApplicationServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private Clock clock;
+
     @InjectMocks
     private RecruitmentApplicationService recruitmentApplicationService;
+
+    // 募集締切境界値のテスト以外はClockの具体的な値を気にしないため、
+    // LocalDateTime.now(clock)がNPEにならないよう最低限のstubをlenientで用意する
+    // (isRecruitmentOpen自体はmockTournament()側でany()マッチにより常にtrueを返すようにしている)。
+    @BeforeEach
+    void setUpClock() {
+        lenient().when(clock.instant()).thenReturn(Instant.now());
+        lenient().when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+    }
 
     private User mockOwner() {
         User owner = mock(User.class);
@@ -81,6 +99,8 @@ class RecruitmentApplicationServiceTest {
     private Tournament mockTournament() {
         Tournament tournament = mock(Tournament.class);
         lenient().when(tournament.getId()).thenReturn(10L);
+        // 募集締切の境界値自体を検証するテスト以外は、常に募集中(締切前)として扱う。
+        lenient().when(tournament.isRecruitmentOpen(any())).thenReturn(true);
         return tournament;
     }
 
@@ -102,6 +122,19 @@ class RecruitmentApplicationServiceTest {
         lenient().when(application.getStatus()).thenReturn(RecruitmentApplicationStatus.PENDING);
         lenient().when(application.getCreatedAt()).thenReturn(now);
         lenient().when(application.getUpdatedAt()).thenReturn(now);
+        return application;
+    }
+
+    // DB取得済み(永続化済み)RecruitmentApplicationを模す。実Entityをspyし、getId()だけを
+    // DBが採番した値としてスタブすることで、approve()/reject()の状態遷移ロジックは本物のまま、
+    // ID比較による除外判定(rejectPendingApplications)が正しく動作するようにする。
+    // RecruitmentApplication.create(...)は永続化前提ではなくgetId()がnullのため、
+    // findByIdやfindTargetAndPendingForUpdateOrderByIdがDBから返す「既に永続化済みの行」を
+    // そのまま使うとNullPointerException(Long#equalsの呼び出し元がnull)になる。
+    private RecruitmentApplication mockPersistedApplication(
+            Team team, User applicant, String message, Long id) {
+        RecruitmentApplication application = spy(RecruitmentApplication.create(team, applicant, message));
+        lenient().doReturn(id).when(application).getId();
         return application;
     }
 
@@ -317,6 +350,87 @@ class RecruitmentApplicationServiceTest {
         assertEquals(RecruitmentApplicationStatus.PENDING, response.status());
     }
 
+    // 正式business rule: 募集締切(recruitmentDeadline)の境界値を固定Clockで検証する。
+    // 締切ちょうど(now == recruitmentDeadline)も不可であることを含む3パターン。
+    @Test
+    void createApplication_募集締切前の場合_申請できる() {
+        LocalDateTime deadline = LocalDateTime.of(2026, 10, 1, 23, 59, 59);
+        LocalDateTime now = deadline.minusSeconds(1);
+        RecruitmentApplicationService serviceWithFixedClock = serviceWithFixedClock(now);
+
+        User owner = mockOwner();
+        User applicant = mockApplicant();
+        Tournament tournament = mockTournament();
+        when(tournament.isRecruitmentOpen(now)).thenReturn(true);
+        Team team = mockTeam(tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L)).thenReturn(Optional.of(applicant));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
+        when(recruitmentApplicationRepository.existsByUser_IdAndTeam_Tournament_IdAndStatus(
+                2L, 10L, RecruitmentApplicationStatus.PENDING)).thenReturn(false);
+
+        RecruitmentApplication savedApplication = mockSavedApplication(team, applicant, null, now);
+        when(recruitmentApplicationRepository.save(any(RecruitmentApplication.class))).thenReturn(savedApplication);
+
+        RecruitmentApplicationResponse response = serviceWithFixedClock.createApplication(
+                2L, 100L, new RecruitmentApplicationCreateRequest(null));
+
+        assertEquals(RecruitmentApplicationStatus.PENDING, response.status());
+    }
+
+    @Test
+    void createApplication_募集締切ちょうどの場合_RecruitmentClosedExceptionを投げ申請は保存されない() {
+        LocalDateTime deadline = LocalDateTime.of(2026, 10, 1, 23, 59, 59);
+        RecruitmentApplicationService serviceWithFixedClock = serviceWithFixedClock(deadline);
+
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        when(tournament.isRecruitmentOpen(deadline)).thenReturn(false);
+        Team team = mockTeam(tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        assertThrows(
+                RecruitmentClosedException.class,
+                () -> serviceWithFixedClock.createApplication(
+                        2L, 100L, new RecruitmentApplicationCreateRequest(null)));
+
+        verify(userRepository, never()).findByIdAndDeleteFlagFalseForUpdate(any());
+        verify(recruitmentApplicationRepository, never()).save(any());
+    }
+
+    @Test
+    void createApplication_募集締切後の場合_RecruitmentClosedExceptionを投げ申請は保存されない() {
+        LocalDateTime deadline = LocalDateTime.of(2026, 10, 1, 23, 59, 59);
+        LocalDateTime now = deadline.plusSeconds(1);
+        RecruitmentApplicationService serviceWithFixedClock = serviceWithFixedClock(now);
+
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        when(tournament.isRecruitmentOpen(now)).thenReturn(false);
+        Team team = mockTeam(tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        assertThrows(
+                RecruitmentClosedException.class,
+                () -> serviceWithFixedClock.createApplication(
+                        2L, 100L, new RecruitmentApplicationCreateRequest(null)));
+
+        verify(userRepository, never()).findByIdAndDeleteFlagFalseForUpdate(any());
+        verify(recruitmentApplicationRepository, never()).save(any());
+    }
+
+    // JwtProviderTestと同じ手法(Clock.fixed)で、募集締切の境界値を決定的に再現する。
+    // 共有の@InjectMocksインスタンス(clockはMockitoモック)とは別に、このテストだけで使う
+    // 固定Clock付きインスタンスを都度生成する。
+    private RecruitmentApplicationService serviceWithFixedClock(LocalDateTime now) {
+        Clock fixedClock = Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+        return new RecruitmentApplicationService(
+                recruitmentApplicationRepository, teamRepository, teamMemberRepository, userRepository, fixedClock);
+    }
+
     // ==================== findTeamApplications / findMyApplications ====================
 
     @Test
@@ -437,10 +551,12 @@ class RecruitmentApplicationServiceTest {
         Tournament tournament = mockTournament();
         when(tournament.getTeamSize()).thenReturn(3);
         Team team = mockTeam(tournament, owner);
-        RecruitmentApplication application = RecruitmentApplication.create(team, applicant, "よろしくお願いします");
+        RecruitmentApplication application = mockPersistedApplication(team, applicant, "よろしくお願いします", 500L);
 
         when(teamRepository.findActiveTeamByIdForUpdate(100L)).thenReturn(Optional.of(team));
-        when(recruitmentApplicationRepository.findByIdForUpdate(500L)).thenReturn(Optional.of(application));
+        when(recruitmentApplicationRepository.findTargetAndPendingForUpdateOrderById(
+                500L, 10L, RecruitmentApplicationStatus.PENDING))
+                .thenReturn(List.of(application));
         when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L)).thenReturn(Optional.of(lockedApplicant));
         when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
         when(teamMemberRepository.countByTeam_Id(100L)).thenReturn(2L);
@@ -450,15 +566,18 @@ class RecruitmentApplicationServiceTest {
         assertEquals(RecruitmentApplicationStatus.APPROVED, response.status());
         assertEquals(RecruitmentApplicationStatus.APPROVED, application.getStatus());
 
-        // lock取得順序: Team → RecruitmentApplication → User
+        // lock取得順序: Team → RecruitmentApplication(対象+他PENDING一括) → User
         InOrder order = inOrder(teamRepository, recruitmentApplicationRepository, userRepository);
         order.verify(teamRepository).findActiveTeamByIdForUpdate(100L);
-        order.verify(recruitmentApplicationRepository).findByIdForUpdate(500L);
+        order.verify(recruitmentApplicationRepository)
+                .findTargetAndPendingForUpdateOrderById(500L, 10L, RecruitmentApplicationStatus.PENDING);
         order.verify(userRepository).findByIdAndDeleteFlagFalseForUpdate(2L);
 
-        // 通常取得(非lock)は使用されていないことを確認する。
-        verify(teamRepository, never()).findActiveTeamById(any());
+        // 事前の非lock読み込み(findById)やfindByIdForUpdate(1行のみのlock)は
+        // この経路では使用されていない(persistence contextの汚染・古いEntity再利用を防ぐため)。
         verify(recruitmentApplicationRepository, never()).findById(any());
+        verify(recruitmentApplicationRepository, never()).findByIdForUpdate(any());
+        verify(teamRepository, never()).findActiveTeamById(any());
         verify(userRepository, never()).findByIdAndDeleteFlagFalse(any());
 
         // TeamMember作成にはlock取得したUser(lockedApplicant)が使用される。
@@ -466,6 +585,107 @@ class RecruitmentApplicationServiceTest {
         verify(teamMemberRepository, times(1)).save(teamMemberCaptor.capture());
         assertEquals(team, teamMemberCaptor.getValue().getTeam());
         assertEquals(lockedApplicant, teamMemberCaptor.getValue().getUser());
+    }
+
+    // 正式business rule: 締切前に受け付けたPENDING Applicationは、募集締切後でも承認可能
+    // (approveApplicationには募集期限チェックを追加していないことの回帰防止)。
+    @Test
+    void approveApplication_募集締切後でも承認できる() {
+        User owner = mockOwner();
+        User applicant = mockApplicant();
+        User lockedApplicant = mock(User.class);
+        lenient().when(lockedApplicant.getId()).thenReturn(2L);
+
+        Tournament tournament = mockTournament();
+        when(tournament.getTeamSize()).thenReturn(3);
+        // 募集締切後であることを明示する(デフォルトのany()->trueスタブを上書きする)。
+        // approveApplicationは募集期限チェックを行わないため実際には呼ばれず、lenientにしている。
+        lenient().when(tournament.isRecruitmentOpen(any())).thenReturn(false);
+        Team team = mockTeam(tournament, owner);
+        RecruitmentApplication application = mockPersistedApplication(team, applicant, null, 500L);
+
+        when(teamRepository.findActiveTeamByIdForUpdate(100L)).thenReturn(Optional.of(team));
+        when(recruitmentApplicationRepository.findTargetAndPendingForUpdateOrderById(
+                500L, 10L, RecruitmentApplicationStatus.PENDING))
+                .thenReturn(List.of(application));
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L)).thenReturn(Optional.of(lockedApplicant));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
+        when(teamMemberRepository.countByTeam_Id(100L)).thenReturn(2L);
+
+        RecruitmentApplicationResponse response = recruitmentApplicationService.approveApplication(1L, 100L, 500L);
+
+        assertEquals(RecruitmentApplicationStatus.APPROVED, response.status());
+        verify(teamMemberRepository, times(1)).save(any(TeamMember.class));
+    }
+
+    // 正式business rule: 同一TournamentでUserがTeamMemberになった時点で、
+    // そのUserが同一Tournament内の他TeamへのPENDING申請はREJECTEDへ遷移する。
+    @Test
+    void approveApplication_同一Tournamentの他PENDING申請はREJECTEDへ遷移し承認対象自身はAPPROVEDになる() {
+        User owner = mockOwner();
+        User applicant = mockApplicant();
+        User lockedApplicant = mock(User.class);
+        lenient().when(lockedApplicant.getId()).thenReturn(2L);
+        lenient().when(lockedApplicant.getName()).thenReturn("Locked Applicant User");
+
+        Tournament tournament = mockTournament();
+        when(tournament.getTeamSize()).thenReturn(3);
+        Team team = mockTeam(tournament, owner);
+        // 承認対象の申請。findTargetAndPendingForUpdateOrderByIdの結果には対象自身(id=500)も
+        // 含まれるため、applicationIdによる除外ロジックが正しく働くことを検証する。
+        RecruitmentApplication targetApplication =
+                mockPersistedApplication(team, applicant, "よろしくお願いします", 500L);
+
+        Team otherTeam = mock(Team.class);
+        lenient().when(otherTeam.getId()).thenReturn(200L);
+        RecruitmentApplication otherPendingApplication =
+                mockPersistedApplication(otherTeam, applicant, "別チームへの申請", 600L);
+
+        when(teamRepository.findActiveTeamByIdForUpdate(100L)).thenReturn(Optional.of(team));
+        when(recruitmentApplicationRepository.findTargetAndPendingForUpdateOrderById(
+                500L, 10L, RecruitmentApplicationStatus.PENDING))
+                .thenReturn(List.of(targetApplication, otherPendingApplication));
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L)).thenReturn(Optional.of(lockedApplicant));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
+        when(teamMemberRepository.countByTeam_Id(100L)).thenReturn(2L);
+
+        RecruitmentApplicationResponse response = recruitmentApplicationService.approveApplication(1L, 100L, 500L);
+
+        assertEquals(RecruitmentApplicationStatus.APPROVED, response.status());
+        assertEquals(RecruitmentApplicationStatus.APPROVED, targetApplication.getStatus());
+        assertEquals(RecruitmentApplicationStatus.REJECTED, otherPendingApplication.getStatus());
+
+        // lock取得順序: Team → RecruitmentApplication(対象+他PENDING一括、ID昇順) → User
+        InOrder order = inOrder(teamRepository, recruitmentApplicationRepository, userRepository);
+        order.verify(teamRepository).findActiveTeamByIdForUpdate(100L);
+        order.verify(recruitmentApplicationRepository)
+                .findTargetAndPendingForUpdateOrderById(500L, 10L, RecruitmentApplicationStatus.PENDING);
+        order.verify(userRepository).findByIdAndDeleteFlagFalseForUpdate(2L);
+    }
+
+    // rejectOtherPendingApplicationsInTournament(TeamService#createTeam経由)自体の挙動を
+    // 直接検証する。除外対象の申請は存在しないため、該当する全PENDING申請がREJECTEDになる。
+    @Test
+    void rejectOtherPendingApplicationsInTournament_該当する全PENDING申請がREJECTEDになる() {
+        User applicant = mockApplicant();
+        Team teamX = mockTeam(mockTournament(), mockOwner());
+        RecruitmentApplication pendingToX = mockPersistedApplication(teamX, applicant, null, 500L);
+
+        Team teamY = mock(Team.class);
+        lenient().when(teamY.getId()).thenReturn(300L);
+        RecruitmentApplication pendingToY = mockPersistedApplication(teamY, applicant, null, 600L);
+
+        when(recruitmentApplicationRepository.findByUser_IdAndTeam_Tournament_IdAndStatusForUpdate(
+                2L, 10L, RecruitmentApplicationStatus.PENDING))
+                .thenReturn(List.of(pendingToX, pendingToY));
+
+        recruitmentApplicationService.rejectOtherPendingApplicationsInTournament(2L, 10L);
+
+        assertEquals(RecruitmentApplicationStatus.REJECTED, pendingToX.getStatus());
+        assertEquals(RecruitmentApplicationStatus.REJECTED, pendingToY.getStatus());
+        verify(recruitmentApplicationRepository)
+                .findByUser_IdAndTeam_Tournament_IdAndStatusForUpdate(
+                        2L, 10L, RecruitmentApplicationStatus.PENDING);
     }
 
     @Test
@@ -476,7 +696,9 @@ class RecruitmentApplicationServiceTest {
                 TeamNotFoundException.class,
                 () -> recruitmentApplicationService.approveApplication(1L, 999L, 500L));
 
-        verify(recruitmentApplicationRepository, never()).findByIdForUpdate(any());
+        verify(recruitmentApplicationRepository, never()).findById(any());
+        verify(recruitmentApplicationRepository, never())
+                .findTargetAndPendingForUpdateOrderById(any(), any(), any());
         verify(userRepository, never()).findByIdAndDeleteFlagFalseForUpdate(any());
         verify(teamMemberRepository, never()).save(any());
     }
@@ -493,7 +715,9 @@ class RecruitmentApplicationServiceTest {
                 NotTeamOwnerException.class,
                 () -> recruitmentApplicationService.approveApplication(999L, 100L, 500L));
 
-        verify(recruitmentApplicationRepository, never()).findByIdForUpdate(any());
+        verify(recruitmentApplicationRepository, never()).findById(any());
+        verify(recruitmentApplicationRepository, never())
+                .findTargetAndPendingForUpdateOrderById(any(), any(), any());
         verify(userRepository, never()).findByIdAndDeleteFlagFalseForUpdate(any());
         verify(teamMemberRepository, never()).save(any());
     }
@@ -505,7 +729,9 @@ class RecruitmentApplicationServiceTest {
         Team team = mockTeam(tournament, owner);
 
         when(teamRepository.findActiveTeamByIdForUpdate(100L)).thenReturn(Optional.of(team));
-        when(recruitmentApplicationRepository.findByIdForUpdate(500L)).thenReturn(Optional.empty());
+        when(recruitmentApplicationRepository.findTargetAndPendingForUpdateOrderById(
+                500L, 10L, RecruitmentApplicationStatus.PENDING))
+                .thenReturn(List.of());
 
         assertThrows(
                 RecruitmentApplicationNotFoundException.class,
@@ -526,10 +752,12 @@ class RecruitmentApplicationServiceTest {
         Team otherTeam = mock(Team.class);
         lenient().when(otherTeam.getId()).thenReturn(200L);
         lenient().when(otherTeam.getOwner()).thenReturn(otherOwner);
-        RecruitmentApplication application = RecruitmentApplication.create(otherTeam, applicant, null);
+        RecruitmentApplication application = mockPersistedApplication(otherTeam, applicant, null, 500L);
 
         when(teamRepository.findActiveTeamByIdForUpdate(100L)).thenReturn(Optional.of(team));
-        when(recruitmentApplicationRepository.findByIdForUpdate(500L)).thenReturn(Optional.of(application));
+        when(recruitmentApplicationRepository.findTargetAndPendingForUpdateOrderById(
+                500L, 10L, RecruitmentApplicationStatus.PENDING))
+                .thenReturn(List.of(application));
 
         assertThrows(
                 RecruitmentApplicationNotFoundException.class,
@@ -546,11 +774,14 @@ class RecruitmentApplicationServiceTest {
         User applicant = mockApplicant();
         Tournament tournament = mockTournament();
         Team team = mockTeam(tournament, owner);
-        RecruitmentApplication application = RecruitmentApplication.create(team, applicant, null);
+        RecruitmentApplication application = mockPersistedApplication(team, applicant, null, 500L);
         application.approve();
 
         when(teamRepository.findActiveTeamByIdForUpdate(100L)).thenReturn(Optional.of(team));
-        when(recruitmentApplicationRepository.findByIdForUpdate(500L)).thenReturn(Optional.of(application));
+        // 既にAPPROVED済みのためPENDING検索条件には合致しないが、ra.id一致分で対象自身は返る。
+        when(recruitmentApplicationRepository.findTargetAndPendingForUpdateOrderById(
+                500L, 10L, RecruitmentApplicationStatus.PENDING))
+                .thenReturn(List.of(application));
 
         assertThrows(
                 ApplicationAlreadyProcessedException.class,
@@ -567,10 +798,12 @@ class RecruitmentApplicationServiceTest {
         User applicant = mockApplicant();
         Tournament tournament = mockTournament();
         Team team = mockTeam(tournament, owner);
-        RecruitmentApplication application = RecruitmentApplication.create(team, applicant, null);
+        RecruitmentApplication application = mockPersistedApplication(team, applicant, null, 500L);
 
         when(teamRepository.findActiveTeamByIdForUpdate(100L)).thenReturn(Optional.of(team));
-        when(recruitmentApplicationRepository.findByIdForUpdate(500L)).thenReturn(Optional.of(application));
+        when(recruitmentApplicationRepository.findTargetAndPendingForUpdateOrderById(
+                500L, 10L, RecruitmentApplicationStatus.PENDING))
+                .thenReturn(List.of(application));
         when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L)).thenReturn(Optional.of(applicant));
         when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(true);
 
@@ -592,10 +825,12 @@ class RecruitmentApplicationServiceTest {
         Tournament tournament = mockTournament();
         when(tournament.getTeamSize()).thenReturn(3);
         Team team = mockTeam(tournament, owner);
-        RecruitmentApplication application = RecruitmentApplication.create(team, applicant, null);
+        RecruitmentApplication application = mockPersistedApplication(team, applicant, null, 500L);
 
         when(teamRepository.findActiveTeamByIdForUpdate(100L)).thenReturn(Optional.of(team));
-        when(recruitmentApplicationRepository.findByIdForUpdate(500L)).thenReturn(Optional.of(application));
+        when(recruitmentApplicationRepository.findTargetAndPendingForUpdateOrderById(
+                500L, 10L, RecruitmentApplicationStatus.PENDING))
+                .thenReturn(List.of(application));
         when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L)).thenReturn(Optional.of(applicant));
         when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
         when(teamMemberRepository.countByTeam_Id(100L)).thenReturn(3L);
@@ -635,6 +870,27 @@ class RecruitmentApplicationServiceTest {
         verify(teamMemberRepository, never()).save(any());
         verify(teamMemberRepository, never()).existsByUser_IdAndTeam_Tournament_Id(any(), any());
         verify(teamMemberRepository, never()).countByTeam_Id(any());
+    }
+
+    // 正式business rule: 締切前に受け付けたPENDING Applicationは、募集締切後でも拒否可能
+    // (rejectApplicationには募集期限チェックを追加していないことの回帰防止)。
+    @Test
+    void rejectApplication_募集締切後でも拒否できる() {
+        User owner = mockOwner();
+        User applicant = mockApplicant();
+        Tournament tournament = mockTournament();
+        // 募集締切後であることを明示する(デフォルトのany()->trueスタブを上書きする)。
+        // rejectApplicationは募集期限チェックを行わないため実際には呼ばれず、lenientにしている。
+        lenient().when(tournament.isRecruitmentOpen(any())).thenReturn(false);
+        Team team = mockTeam(tournament, owner);
+        RecruitmentApplication application = RecruitmentApplication.create(team, applicant, null);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+        when(recruitmentApplicationRepository.findByIdForUpdate(500L)).thenReturn(Optional.of(application));
+
+        RecruitmentApplicationResponse response = recruitmentApplicationService.rejectApplication(1L, 100L, 500L);
+
+        assertEquals(RecruitmentApplicationStatus.REJECTED, response.status());
     }
 
     @Test

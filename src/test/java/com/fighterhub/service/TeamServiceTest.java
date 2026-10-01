@@ -12,10 +12,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -37,6 +41,7 @@ import com.fighterhub.exception.CannotRemoveTeamOwnerException;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
 import com.fighterhub.exception.InvalidRequestException;
 import com.fighterhub.exception.NotTeamOwnerException;
+import com.fighterhub.exception.RecruitmentClosedException;
 import com.fighterhub.exception.TeamMemberNotFoundException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.exception.TournamentNotFoundException;
@@ -65,8 +70,23 @@ class TeamServiceTest {
     @Mock
     private CharacterRepository characterRepository;
 
+    @Mock
+    private RecruitmentApplicationService recruitmentApplicationService;
+
+    @Mock
+    private Clock clock;
+
     @InjectMocks
     private TeamService teamService;
+
+    // 募集締切境界値のテスト以外はClockの具体的な値を気にしないため、
+    // LocalDateTime.now(clock)がNPEにならないよう最低限のstubをlenientで用意する
+    // (isRecruitmentOpen自体はmockTournament()側でany()マッチにより常にtrueを返すようにしている)。
+    @BeforeEach
+    void setUpClock() {
+        lenient().when(clock.instant()).thenReturn(Instant.now());
+        lenient().when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+    }
 
     private static TeamCreateRequest requestWithCharacters(List<Long> characterRequirements) {
         return new TeamCreateRequest(
@@ -89,6 +109,8 @@ class TeamServiceTest {
         Tournament tournament = mock(Tournament.class);
         lenient().when(tournament.getId()).thenReturn(10L);
         lenient().when(tournament.getName()).thenReturn("Test Cup");
+        // 募集締切の境界値自体を検証するテスト以外は、常に募集中(締切前)として扱う。
+        lenient().when(tournament.isRecruitmentOpen(any())).thenReturn(true);
         return tournament;
     }
 
@@ -155,6 +177,110 @@ class TeamServiceTest {
         verify(teamMemberRepository, times(1)).save(teamMemberCaptor.capture());
         assertEquals(savedTeam, teamMemberCaptor.getValue().getTeam());
         assertEquals(owner, teamMemberCaptor.getValue().getUser());
+    }
+
+    // 正式business rule: 募集締切(recruitmentDeadline)の境界値を固定Clockで検証する。
+    // 締切ちょうど(now == recruitmentDeadline)も不可であることを含む3パターン。
+    @Test
+    void createTeam_募集締切前の場合_Teamを作成できる() {
+        LocalDateTime deadline = LocalDateTime.of(2026, 10, 1, 23, 59, 59);
+        LocalDateTime now = deadline.minusSeconds(1);
+        TeamService serviceWithFixedClock = teamServiceWithFixedClock(now);
+
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        when(tournament.isRecruitmentOpen(now)).thenReturn(true);
+
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(owner));
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(1L, 10L)).thenReturn(false);
+
+        Team savedTeam = mockSavedTeam(tournament, owner);
+        when(teamRepository.save(any(Team.class))).thenReturn(savedTeam);
+
+        TeamCreateResponse response = serviceWithFixedClock.createTeam(1L, requestWithCharacters(null));
+
+        assertNotNull(response);
+        verify(teamMemberRepository, times(1)).save(any(TeamMember.class));
+    }
+
+    @Test
+    void createTeam_募集締切ちょうどの場合_RecruitmentClosedExceptionを投げTeamは作成されない() {
+        LocalDateTime deadline = LocalDateTime.of(2026, 10, 1, 23, 59, 59);
+        TeamService serviceWithFixedClock = teamServiceWithFixedClock(deadline);
+
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        when(tournament.isRecruitmentOpen(deadline)).thenReturn(false);
+
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(owner));
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+
+        assertThrows(
+                RecruitmentClosedException.class,
+                () -> serviceWithFixedClock.createTeam(1L, requestWithCharacters(null)));
+
+        verify(teamRepository, never()).save(any());
+        verify(teamMemberRepository, never()).save(any());
+    }
+
+    @Test
+    void createTeam_募集締切後の場合_RecruitmentClosedExceptionを投げTeamは作成されない() {
+        LocalDateTime deadline = LocalDateTime.of(2026, 10, 1, 23, 59, 59);
+        LocalDateTime now = deadline.plusSeconds(1);
+        TeamService serviceWithFixedClock = teamServiceWithFixedClock(now);
+
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        when(tournament.isRecruitmentOpen(now)).thenReturn(false);
+
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(owner));
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+
+        assertThrows(
+                RecruitmentClosedException.class,
+                () -> serviceWithFixedClock.createTeam(1L, requestWithCharacters(null)));
+
+        verify(teamRepository, never()).save(any());
+        verify(teamMemberRepository, never()).save(any());
+    }
+
+    // JwtProviderTestと同じ手法(Clock.fixed)で、募集締切の境界値を決定的に再現する。
+    // 共有の@InjectMocksインスタンス(clockはMockitoモック)とは別に、このテストだけで使う
+    // 固定Clock付きインスタンスを都度生成する。
+    private TeamService teamServiceWithFixedClock(LocalDateTime now) {
+        Clock fixedClock = Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+        return new TeamService(
+                teamRepository,
+                teamMemberRepository,
+                tournamentRepository,
+                userRepository,
+                characterRepository,
+                recruitmentApplicationService,
+                fixedClock);
+    }
+
+    // 正式business rule: 同一TournamentでUserがTeamMemberになった時点で、
+    // そのUserが同一Tournament内の他TeamへのPENDING申請はREJECTEDへ遷移する。
+    // Team作成によってownerは即座にTeamMemberになるため、createTeam成功時には必ず
+    // 正しいuserId/tournamentIdでこの処理が呼び出されることを検証する。
+    // 実際のREJECTEDへの遷移ロジック自体はRecruitmentApplicationServiceTest側で検証する。
+    @Test
+    void createTeam_成功時に同一TournamentのPENDING申請をREJECTEDへ遷移させる処理が呼び出される() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(owner));
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(1L, 10L)).thenReturn(false);
+
+        Team savedTeam = mockSavedTeam(tournament, owner);
+        when(teamRepository.save(any(Team.class))).thenReturn(savedTeam);
+
+        teamService.createTeam(1L, requestWithCharacters(null));
+
+        verify(recruitmentApplicationService, times(1))
+                .rejectOtherPendingApplicationsInTournament(1L, 10L);
     }
 
     @Test

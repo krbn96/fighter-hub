@@ -23,6 +23,7 @@ const sampleTournament: Tournament = {
   name: 'STREET FIGHTER 6 CUP',
   teamSize: 3,
   startAt: '2026-10-10T13:00:00',
+  recruitmentDeadline: '2099-12-15T23:59:00',
   maxPlayers: 64,
   status: 'OPEN',
   createdAt: '2026-09-01T00:00:00',
@@ -91,5 +92,54 @@ describe('TournamentDetailView', () => {
 
     expect(createTeamLink).toBeDefined()
     expect(createTeamLink?.props('to')).toBe('/tournaments/1/teams/create')
+  })
+
+  it('募集締切前はRECRUITING表示・募集締切/開始日時が表示され、CREATE TEAMはリンクとして有効', async () => {
+    vi.mocked(fetchTournamentById).mockResolvedValue(sampleTournament)
+
+    const wrapper = mount(TournamentDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('RECRUITING')
+    expect(wrapper.text()).toContain('2099/12/15 23:59')
+    expect(wrapper.text()).toContain('2026/10/10 13:00')
+
+    const createTeamLink = wrapper
+      .findAllComponents(RouterLinkStub)
+      .find((link) => link.text().includes('CREATE TEAM'))
+    expect(createTeamLink).toBeDefined()
+  })
+
+  it('募集締切後はCLOSED表示になり、CREATE TEAMはdisabledになり理由が表示され、FIND A TEAMは引き続き利用できる', async () => {
+    vi.mocked(fetchTournamentById).mockResolvedValue({
+      ...sampleTournament,
+      recruitmentDeadline: '2020-01-01T00:00:00',
+    })
+
+    const wrapper = mount(TournamentDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('CLOSED')
+    expect(wrapper.text()).toContain('チーム募集は終了しました')
+
+    const createTeamLink = wrapper
+      .findAllComponents(RouterLinkStub)
+      .find((link) => link.text().includes('CREATE TEAM'))
+    expect(createTeamLink).toBeUndefined()
+
+    const createTeamButton = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('CREATE TEAM'))
+    expect(createTeamButton?.attributes('disabled')).toBeDefined()
+
+    const findTeamLink = wrapper
+      .findAllComponents(RouterLinkStub)
+      .find((link) => link.text().includes('FIND A TEAM'))
+    expect(findTeamLink).toBeDefined()
+    expect(findTeamLink?.props('to')).toBe('/tournaments/1/teams')
   })
 })

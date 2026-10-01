@@ -29,6 +29,11 @@ public class Tournament {
     @Column(name = "start_at", nullable = false)
     private LocalDateTime startAt;
 
+    // FIGHTER HUB上でのチーム募集・参加申請の締切日時。
+    // 募集状態(RECRUITING/CLOSED)はDBへ保存せず、isRecruitmentOpen(now)でその都度導出する。
+    @Column(name = "recruitment_deadline", nullable = false)
+    private LocalDateTime recruitmentDeadline;
+
     @Column(name = "max_players", nullable = false)
     private Integer maxPlayers;
 
@@ -55,6 +60,7 @@ public class Tournament {
             String name,
             Integer teamSize,
             LocalDateTime startAt,
+            LocalDateTime recruitmentDeadline,
             Integer maxPlayers,
             String status) {
 
@@ -62,6 +68,7 @@ public class Tournament {
         tournament.name = name;
         tournament.teamSize = teamSize;
         tournament.startAt = startAt;
+        tournament.recruitmentDeadline = recruitmentDeadline;
         tournament.maxPlayers = maxPlayers;
         tournament.status = status;
 
@@ -78,6 +85,10 @@ public class Tournament {
 
     public void updateStartAt(LocalDateTime startAt) {
         this.startAt = startAt;
+    }
+
+    public void updateRecruitmentDeadline(LocalDateTime recruitmentDeadline) {
+        this.recruitmentDeadline = recruitmentDeadline;
     }
 
     public void updateMaxPlayers(Integer maxPlayers) {
@@ -107,6 +118,17 @@ public class Tournament {
 
     public LocalDateTime getStartAt() {
         return startAt;
+    }
+
+    public LocalDateTime getRecruitmentDeadline() {
+        return recruitmentDeadline;
+    }
+
+    // 募集状態(RECRUITING/CLOSED)はDBへ保存せず、呼び出し側(Service)がClockから取得したnowを
+    // 渡して都度判定する。Entity自体はSpring/Clockに依存しない(nowを引数で受け取るのみ)。
+    // 締切ちょうど(now == recruitmentDeadline)はfalse(CLOSED)。
+    public boolean isRecruitmentOpen(LocalDateTime now) {
+        return now.isBefore(recruitmentDeadline);
     }
 
     public Integer getMaxPlayers() {

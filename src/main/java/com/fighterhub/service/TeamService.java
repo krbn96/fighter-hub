@@ -1,5 +1,7 @@
 package com.fighterhub.service;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ import com.fighterhub.exception.CannotRemoveTeamOwnerException;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
 import com.fighterhub.exception.InvalidRequestException;
 import com.fighterhub.exception.NotTeamOwnerException;
+import com.fighterhub.exception.RecruitmentClosedException;
 import com.fighterhub.exception.TeamMemberNotFoundException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.exception.TournamentNotFoundException;
@@ -36,18 +39,24 @@ public class TeamService {
     private final TournamentRepository tournamentRepository;
     private final UserRepository userRepository;
     private final CharacterRepository characterRepository;
+    private final RecruitmentApplicationService recruitmentApplicationService;
+    private final Clock clock;
 
     public TeamService(
             TeamRepository teamRepository,
             TeamMemberRepository teamMemberRepository,
             TournamentRepository tournamentRepository,
             UserRepository userRepository,
-            CharacterRepository characterRepository) {
+            CharacterRepository characterRepository,
+            RecruitmentApplicationService recruitmentApplicationService,
+            Clock clock) {
         this.teamRepository = teamRepository;
         this.teamMemberRepository = teamMemberRepository;
         this.tournamentRepository = tournamentRepository;
         this.userRepository = userRepository;
         this.characterRepository = characterRepository;
+        this.recruitmentApplicationService = recruitmentApplicationService;
+        this.clock = clock;
     }
 
     @Transactional
@@ -57,6 +66,12 @@ public class TeamService {
 
         Tournament tournament = tournamentRepository.findByIdAndDeleteFlagFalse(request.tournamentId())
                 .orElseThrow(() -> new TournamentNotFoundException(request.tournamentId()));
+
+        // 正式business rule: 募集締切(recruitmentDeadline)後の新規Team作成は禁止する
+        // (締切ちょうども不可。Tournament.isRecruitmentOpenがnow.isBefore(deadline)で判定する)。
+        if (!tournament.isRecruitmentOpen(LocalDateTime.now(clock))) {
+            throw new RecruitmentClosedException(tournament.getId());
+        }
 
         if (teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(userId, tournament.getId())) {
             throw new DuplicateTournamentMembershipException(userId, tournament.getId());
@@ -75,6 +90,12 @@ public class TeamService {
         Team savedTeam = teamRepository.save(team);
 
         teamMemberRepository.save(TeamMember.create(savedTeam, owner));
+
+        // 正式business rule: 同一TournamentでUserがTeamMemberになった時点で、
+        // そのUserが同一Tournament内の他TeamへのPENDING申請はREJECTEDへ遷移する。
+        // Team作成によってownerは即座にTeamMemberになるため、ここでも同じ処理を行う。
+        recruitmentApplicationService.rejectOtherPendingApplicationsInTournament(
+                owner.getId(), tournament.getId());
 
         return toTeamCreateResponse(savedTeam);
     }

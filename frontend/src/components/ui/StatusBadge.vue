@@ -8,6 +8,8 @@ type Tone = 'neutral' | 'primary' | 'success' | 'warning' | 'error'
 const DEFAULT_TONE_BY_STATUS: Record<string, Tone> = {
   UPCOMING: 'primary',
   OPEN: 'primary',
+  RECRUITING: 'primary',
+  CLOSED: 'neutral',
   PENDING: 'warning',
   APPROVED: 'success',
   REJECTED: 'error',

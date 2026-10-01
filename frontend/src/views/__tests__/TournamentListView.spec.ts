@@ -15,6 +15,7 @@ const sampleTournament: Tournament = {
   name: 'STREET FIGHTER 6 CUP',
   teamSize: 3,
   startAt: '2026-10-10T13:00:00',
+  recruitmentDeadline: '2026-10-05T23:59:00',
   maxPlayers: 64,
   status: 'OPEN',
   createdAt: '2026-09-01T00:00:00',

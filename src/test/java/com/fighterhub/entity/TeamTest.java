@@ -12,7 +12,8 @@ import org.junit.jupiter.api.Test;
 class TeamTest {
 
     private static Tournament newTournament() {
-        return Tournament.create("Test Cup", 3, LocalDateTime.now(), 24, "OPEN");
+        return Tournament.create(
+                "Test Cup", 3, LocalDateTime.now(), LocalDateTime.now().minusDays(1), 24, "OPEN");
     }
 
     private static User newOwner() {

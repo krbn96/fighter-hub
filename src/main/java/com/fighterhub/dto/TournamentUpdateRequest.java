@@ -20,6 +20,9 @@ public record TournamentUpdateRequest(
     JsonNullable<LocalDateTime> startAt,
 
     @NotNull
+    JsonNullable<LocalDateTime> recruitmentDeadline,
+
+    @NotNull
     @Positive
     JsonNullable<Integer> maxPlayers,
 
@@ -30,6 +33,7 @@ public record TournamentUpdateRequest(
         name = normalize(name);
         teamSize = normalize(teamSize);
         startAt = normalize(startAt);
+        recruitmentDeadline = normalize(recruitmentDeadline);
         maxPlayers = normalize(maxPlayers);
         status = normalize(status);
     }

@@ -37,6 +37,7 @@ import com.fighterhub.exception.DuplicatePendingApplicationException;
 import com.fighterhub.exception.DuplicateTournamentMembershipException;
 import com.fighterhub.exception.NotTeamOwnerException;
 import com.fighterhub.exception.RecruitmentApplicationNotFoundException;
+import com.fighterhub.exception.RecruitmentClosedException;
 import com.fighterhub.exception.TeamFullException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.service.RecruitmentApplicationService;
@@ -181,6 +182,21 @@ class RecruitmentApplicationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void createApplication_ServiceがRecruitmentClosedExceptionを投げた場合_409を返す() throws Exception {
+        Jwt jwt = validJwt("2");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        when(recruitmentApplicationService.createApplication(eq(2L), eq(100L), any(RecruitmentApplicationCreateRequest.class)))
+                .thenThrow(new RecruitmentClosedException(10L));
+
+        mockMvc.perform(post("/api/teams/100/applications")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Recruitment is closed for this tournament. tournamentId=10"));
     }
 
     @Test

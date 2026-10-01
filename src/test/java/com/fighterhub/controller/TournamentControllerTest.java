@@ -1,5 +1,6 @@
 package com.fighterhub.controller;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -73,6 +75,7 @@ class TournamentControllerTest {
                 "STREET FIGHTER 6 CUP",
                 3,
                 LocalDateTime.of(2026, 10, 1, 19, 0),
+                LocalDateTime.of(2026, 9, 30, 23, 59),
                 64,
                 "OPEN",
                 LocalDateTime.of(2026, 1, 1, 0, 0),
@@ -90,7 +93,8 @@ class TournamentControllerTest {
                 .andExpect(jsonPath("$[0].name").value("STREET FIGHTER 6 CUP"))
                 .andExpect(jsonPath("$[0].teamSize").value(3))
                 .andExpect(jsonPath("$[0].maxPlayers").value(64))
-                .andExpect(jsonPath("$[0].status").value("OPEN"));
+                .andExpect(jsonPath("$[0].status").value("OPEN"))
+                .andExpect(jsonPath("$[0].recruitmentDeadline").value("2026-09-30T23:59:00"));
     }
 
     @Test
@@ -174,6 +178,7 @@ class TournamentControllerTest {
                   "name": "STREET FIGHTER 6 CUP",
                   "teamSize": 3,
                   "startAt": "2026-10-01T19:00:00",
+                  "recruitmentDeadline": "2026-09-30T23:59:00",
                   "maxPlayers": 64,
                   "status": "OPEN"
                 }
@@ -185,10 +190,13 @@ class TournamentControllerTest {
                         .content(requestBody))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(100))
-                .andExpect(jsonPath("$.name").value("STREET FIGHTER 6 CUP"));
+                .andExpect(jsonPath("$.name").value("STREET FIGHTER 6 CUP"))
+                .andExpect(jsonPath("$.recruitmentDeadline").value("2026-09-30T23:59:00"));
 
-        verify(tournamentService, times(1))
-                .createTournament(eq(1L), any(TournamentCreateRequest.class));
+        ArgumentCaptor<TournamentCreateRequest> requestCaptor =
+                ArgumentCaptor.forClass(TournamentCreateRequest.class);
+        verify(tournamentService, times(1)).createTournament(eq(1L), requestCaptor.capture());
+        assertEquals(LocalDateTime.of(2026, 9, 30, 23, 59, 0), requestCaptor.getValue().recruitmentDeadline());
     }
 
     @Test
@@ -198,6 +206,7 @@ class TournamentControllerTest {
                   "name": "STREET FIGHTER 6 CUP",
                   "teamSize": 3,
                   "startAt": "2026-10-01T19:00:00",
+                  "recruitmentDeadline": "2026-09-30T23:59:00",
                   "maxPlayers": 64,
                   "status": "OPEN"
                 }
@@ -223,6 +232,7 @@ class TournamentControllerTest {
                   "name": "STREET FIGHTER 6 CUP",
                   "teamSize": 3,
                   "startAt": "2026-10-01T19:00:00",
+                  "recruitmentDeadline": "2026-09-30T23:59:00",
                   "maxPlayers": 64,
                   "status": "OPEN"
                 }
@@ -247,6 +257,7 @@ class TournamentControllerTest {
                   "name": "STREET FIGHTER 6 CUP",
                   "teamSize": 3,
                   "startAt": "2026-10-01T19:00:00",
+                  "recruitmentDeadline": "2026-09-30T23:59:00",
                   "maxPlayers": 64,
                   "status": "OPEN"
                 }
@@ -269,6 +280,7 @@ class TournamentControllerTest {
                   "name": "",
                   "teamSize": 3,
                   "startAt": "2026-10-01T19:00:00",
+                  "recruitmentDeadline": "2026-09-30T23:59:00",
                   "maxPlayers": 64,
                   "status": "OPEN"
                 }

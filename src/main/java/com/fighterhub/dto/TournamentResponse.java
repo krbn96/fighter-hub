@@ -7,6 +7,7 @@ public record TournamentResponse(
     String name,
     Integer teamSize,
     LocalDateTime startAt,
+    LocalDateTime recruitmentDeadline,
     Integer maxPlayers,
     String status,
     LocalDateTime createdAt,

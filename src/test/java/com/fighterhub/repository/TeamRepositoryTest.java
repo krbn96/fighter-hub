@@ -260,7 +260,8 @@ class TeamRepositoryTest {
 
     private Tournament createTournament() {
         Tournament tournament = tournamentRepository.save(Tournament.create(
-                "Test Cup " + UUID.randomUUID(), 3, LocalDateTime.now(), 24, "OPEN"));
+                "Test Cup " + UUID.randomUUID(), 3, LocalDateTime.now(), LocalDateTime.now().minusDays(1),
+                24, "OPEN"));
         createdTournamentIds.add(tournament.getId());
 
         return tournament;

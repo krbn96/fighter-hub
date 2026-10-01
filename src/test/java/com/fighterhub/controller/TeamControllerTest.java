@@ -41,6 +41,7 @@ import com.fighterhub.dto.TeamResponse;
 import com.fighterhub.dto.TeamUpdateRequest;
 import com.fighterhub.exception.CannotRemoveTeamOwnerException;
 import com.fighterhub.exception.NotTeamOwnerException;
+import com.fighterhub.exception.RecruitmentClosedException;
 import com.fighterhub.exception.TeamMemberNotFoundException;
 import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.service.TeamService;
@@ -222,6 +223,28 @@ class TeamControllerTest {
                 .andExpect(status().isUnauthorized());
 
         verify(teamService, never()).createTeam(any(), any());
+    }
+
+    @Test
+    void createTeam_TeamServiceがRecruitmentClosedExceptionを投げた場合_409を返す() throws Exception {
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+        when(teamService.createTeam(eq(1L), any(TeamCreateRequest.class)))
+                .thenThrow(new RecruitmentClosedException(10L));
+
+        String requestBody = """
+                {
+                  "tournamentId": 10,
+                  "name": "Team Ryu"
+                }
+                """;
+
+        mockMvc.perform(post("/api/teams")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Recruitment is closed for this tournament. tournamentId=10"));
     }
 
     @Test
