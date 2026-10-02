@@ -203,6 +203,8 @@ API仕様はJava実装（Controller / DTO / Validation等）をSource of Truth�
 
 ## Setup
 
+FIGHTER HUB全体（Frontend / Backend / PostgreSQL）をDocker Composeでまとめて起動する方法を推奨します。Backend / Frontendを個別にホスト上で起動する従来の開発方法も引き続き利用できます。
+
 ### 1. Clone repository
 
 ```bash
@@ -210,56 +212,38 @@ git clone https://github.com/krbn96/fighter-hub.git
 cd fighter-hub
 ```
 
-### 2. Set database password
-
-データベース接続には環境変数 `DB_PASSWORD` を使用します。
-
-既存の `DB_PASSWORD` を変更したくない場合は、一時的に値を設定して実行することもできます。
-
-macOS / Linux:
+### 2. Configure environment variables
 
 ```bash
-export DB_PASSWORD=your_password
+cp .env.example .env
 ```
 
-Windows PowerShell:
+`.env` を編集し、以下を設定してください（`.env` はGit管理対象外です。実値をREADMEやGit管理対象のファイルへ直接記載しないでください）。
 
-```powershell
-$env:DB_PASSWORD="your_password"
-```
+- `DB_PASSWORD`: PostgreSQLの接続パスワード（任意の文字列）
+- `JWT_SECRET`: JWT署名用secret。Base64エンコードされた32byte（256bit）以上の値が必要です（生成例: `openssl rand -base64 32`）
 
-> `DB_PASSWORD` にはローカル開発環境で使用するPostgreSQLのパスワードを設定してください。
-> パスワードをREADMEやGit管理対象のファイルへ直接記載しないでください。
-
-### 3. Start PostgreSQL
-
-Docker Composeを使用してPostgreSQLを起動します。
+### 3. Start with Docker Compose（推奨）
 
 ```bash
-docker compose up -d
+docker compose up --build
 ```
 
-### 4. Start application
+起動後、ブラウザから `http://localhost` へアクセスしてください。Frontend（Nginx）が `/api` 宛のリクエストを同一オリジンでBackendへreverse proxyするため、CORS設定は不要です。
 
-macOS / Linux:
+### ローカル開発時の個別起動（Docker無し）
+
+Backend / Frontendをホスト上で個別に起動して開発する場合は、環境変数（`DB_PASSWORD` / `JWT_SECRET`）を設定した上で以下を実行します。Docker版PostgreSQLはhostへportを公開していないため、この方法を使う場合は別途ローカルにPostgreSQLを用意してください。
+
+Backend:
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-Windows:
+Windows PowerShellの場合は `.\mvnw spring-boot:run` を使用してください。`http://localhost:8080` で起動します。
 
-```powershell
-.\mvnw spring-boot:run
-```
-
-アプリケーションは以下で起動します。
-
-`http://localhost:8080`
-
-## Frontend Setup
-
-backend（Spring Boot）とPostgreSQLが起動済みであることを前提とします。
+Frontend:
 
 ```bash
 cd frontend
@@ -267,7 +251,7 @@ npm install
 npm run dev
 ```
 
-開発時は、Vite dev serverの設定（`frontend/vite.config.ts`）により`/api`宛のリクエストをSpring Boot（`http://localhost:8080`）へproxyしています。
+開発時は、Vite dev serverの設定（`frontend/vite.config.ts`）により `/api` 宛のリクエストをSpring Boot（`http://localhost:8080`）へproxyします。
 
 ## Testing
 
@@ -318,4 +302,6 @@ npm run test:unit -- --run
 
 Spring Bootを使用したバックエンドAPIの基盤を構築し、キャラクター情報取得API、ユーザー登録、JWT認証によるログイン、自分のプロフィール取得・更新、チーム作成・編集・メンバー一覧取得・メンバー削除、チームへの参加申請と承認・拒否（承認時のメンバー自動追加、定員チェック、Pessimistic Lockによる同時実行対策を含む）、大会の一覧・詳細取得およびADMINユーザーによる大会作成・更新・論理削除、大会ごとのチーム一覧取得、共通エラーハンドリング、APIドキュメント、テスト環境まで実装しています。
 
-Week 7では、Vue 3 + TypeScriptによるフロントエンドを実装しました。ログイン、マイページ、大会・チームの閲覧、チーム作成・編集、参加申請とownerによる承認・拒否まで、主要なユーザー操作を画面から一通り行える状態になっています。Docker/AWS等でのデプロイはまだ行っていません。
+Week 7では、Vue 3 + TypeScriptによるフロントエンドを実装しました。ログイン、マイページ、大会・チームの閲覧、チーム作成・編集、参加申請とownerによる承認・拒否まで、主要なユーザー操作を画面から一通り行える状態になっています。
+
+Week 8では、Docker Composeによるアプリケーション全体（Frontend/Backend/PostgreSQL）の起動に対応しました。AWS等へのデプロイはまだ行っていません。

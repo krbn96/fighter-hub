@@ -6,10 +6,41 @@ services:
       POSTGRES_DB: fighter_hub
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "5432:5432"
+    # hostのネイティブPostgreSQL(5432番)との競合を避けるため、hostへは公開しない。
+    # backend/frontend等、同一compose networkの他serviceからは "postgres:5432" で到達できる。
     volumes:
       - fighter-hub-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fighter_hub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fighter-hub-backend
+    environment:
+      # application.yaml自体は変更せず、Docker環境向けにdatasource host部分のみ上書きする。
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fighter_hub
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # backendのportはhostへ公開しない。frontend(Nginx)からDocker network内の
+    # "backend:8080" へreverse proxyするため、host公開は不要(攻撃面も減らせる)。
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fighter-hub-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
 
 volumes:
   fighter-hub-postgres-data:

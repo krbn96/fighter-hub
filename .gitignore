@@ -34,3 +34,10 @@ build/
 
 ### Claude Code ###
 claude-report.md
+
+### Environment / secrets ###
+# DB_PASSWORD/JWT_SECRET等の実値を含むファイルはGit管理しない。
+# テンプレートである.env.exampleのみ明示的に追跡対象とする。
+.env
+.env.*
+!.env.example

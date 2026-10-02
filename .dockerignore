@@ -1,0 +1,29 @@
+# Backend build context(root Dockerfile)用。
+# mvnw / .mvn / pom.xml / src はbuildに必要なため除外しない。
+
+.git
+.gitattributes
+.gitignore
+
+# frontendはbackend buildに不要(別途frontend/Dockerfileが独自contextでbuildする)。
+frontend
+
+target/
+
+# IDE files
+.idea
+.vscode
+*.iml
+*.iws
+*.ipr
+
+# local env/secrets(.env.exampleはbuildに不要なため区別せずまとめて除外する)
+.env
+.env.*
+
+# logs
+*.log
+
+# Claude Code
+claude-report.md
+.claude

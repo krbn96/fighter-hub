@@ -1,0 +1,23 @@
+# Frontend build context(frontend/Dockerfile)用。
+# package.json / package-lock.json / src 等、buildに必要なものは除外しない。
+
+node_modules
+dist
+
+# IDE/local files
+.idea
+.vscode
+*.local
+
+# env files
+.env
+.env.*
+
+# logs
+*.log
+npm-debug.log*
+
+# tests / tooling caches(buildには不要)
+coverage
+.eslintcache
+*.tsbuildinfo
