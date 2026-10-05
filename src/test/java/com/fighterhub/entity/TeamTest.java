@@ -13,7 +13,7 @@ class TeamTest {
 
     private static Tournament newTournament() {
         return Tournament.create(
-                "Test Cup", 3, LocalDateTime.now(), LocalDateTime.now().minusDays(1), 24, "OPEN");
+                "Test Cup", 3, LocalDateTime.now(), LocalDateTime.now().minusDays(1), 24);
     }
 
     private static User newOwner() {

@@ -37,11 +37,6 @@ public class Tournament {
     @Column(name = "max_players", nullable = false)
     private Integer maxPlayers;
 
-    // statusの許容値・状態遷移は未確定のため、単純な文字列として保持する。
-    // 詳細な設計はTournament機能を実装するタイミングで別途行う。
-    @Column(name = "status", nullable = false, length = 30)
-    private String status;
-
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -61,8 +56,7 @@ public class Tournament {
             Integer teamSize,
             LocalDateTime startAt,
             LocalDateTime recruitmentDeadline,
-            Integer maxPlayers,
-            String status) {
+            Integer maxPlayers) {
 
         Tournament tournament = new Tournament();
         tournament.name = name;
@@ -70,7 +64,6 @@ public class Tournament {
         tournament.startAt = startAt;
         tournament.recruitmentDeadline = recruitmentDeadline;
         tournament.maxPlayers = maxPlayers;
-        tournament.status = status;
 
         return tournament;
     }
@@ -93,10 +86,6 @@ public class Tournament {
 
     public void updateMaxPlayers(Integer maxPlayers) {
         this.maxPlayers = maxPlayers;
-    }
-
-    public void updateStatus(String status) {
-        this.status = status;
     }
 
     // 物理DELETEは行わず、deleteFlagをtrueにする論理削除。
@@ -133,10 +122,6 @@ public class Tournament {
 
     public Integer getMaxPlayers() {
         return maxPlayers;
-    }
-
-    public String getStatus() {
-        return status;
     }
 
     public LocalDateTime getCreatedAt() {

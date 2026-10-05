@@ -12,7 +12,7 @@ class TeamMemberTest {
     @Test
     void create_指定したTeamとUserでTeamMemberを生成できる() {
         Tournament tournament = Tournament.create(
-                "Test Cup", 3, LocalDateTime.now(), LocalDateTime.now().minusDays(1), 24, "OPEN");
+                "Test Cup", 3, LocalDateTime.now(), LocalDateTime.now().minusDays(1), 24);
         User owner = User.create(
                 "Owner User",
                 "owner@example.com",

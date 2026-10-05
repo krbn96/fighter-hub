@@ -20,8 +20,7 @@ class TournamentTest {
                 3,
                 startAt,
                 recruitmentDeadline,
-                64,
-                "OPEN"
+                64
         );
 
         assertEquals("STREET FIGHTER 6 CUP", tournament.getName());
@@ -29,13 +28,12 @@ class TournamentTest {
         assertEquals(startAt, tournament.getStartAt());
         assertEquals(recruitmentDeadline, tournament.getRecruitmentDeadline());
         assertEquals(64, tournament.getMaxPlayers());
-        assertEquals("OPEN", tournament.getStatus());
     }
 
     @Test
     void create_deleteFlagの初期値はfalseである() {
         Tournament tournament = Tournament.create(
-                "Test Cup", 3, LocalDateTime.now(), LocalDateTime.now().minusDays(1), 8, "OPEN");
+                "Test Cup", 3, LocalDateTime.now(), LocalDateTime.now().minusDays(1), 8);
 
         assertFalse(tournament.isDeleteFlag());
     }
@@ -46,7 +44,7 @@ class TournamentTest {
     void isRecruitmentOpen_締切前はtrueを返す() {
         LocalDateTime deadline = LocalDateTime.of(2026, 9, 30, 23, 59);
         Tournament tournament = Tournament.create(
-                "Test Cup", 3, LocalDateTime.of(2026, 10, 1, 19, 0), deadline, 8, "OPEN");
+                "Test Cup", 3, LocalDateTime.of(2026, 10, 1, 19, 0), deadline, 8);
 
         assertTrue(tournament.isRecruitmentOpen(deadline.minusSeconds(1)));
     }
@@ -55,7 +53,7 @@ class TournamentTest {
     void isRecruitmentOpen_締切ちょうどはfalseを返す() {
         LocalDateTime deadline = LocalDateTime.of(2026, 9, 30, 23, 59);
         Tournament tournament = Tournament.create(
-                "Test Cup", 3, LocalDateTime.of(2026, 10, 1, 19, 0), deadline, 8, "OPEN");
+                "Test Cup", 3, LocalDateTime.of(2026, 10, 1, 19, 0), deadline, 8);
 
         assertFalse(tournament.isRecruitmentOpen(deadline));
     }
@@ -64,7 +62,7 @@ class TournamentTest {
     void isRecruitmentOpen_締切後はfalseを返す() {
         LocalDateTime deadline = LocalDateTime.of(2026, 9, 30, 23, 59);
         Tournament tournament = Tournament.create(
-                "Test Cup", 3, LocalDateTime.of(2026, 10, 1, 19, 0), deadline, 8, "OPEN");
+                "Test Cup", 3, LocalDateTime.of(2026, 10, 1, 19, 0), deadline, 8);
 
         assertFalse(tournament.isRecruitmentOpen(deadline.plusSeconds(1)));
     }

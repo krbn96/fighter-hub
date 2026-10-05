@@ -64,8 +64,7 @@ class TournamentServiceTest {
                 3,
                 SAMPLE_START_AT,
                 SAMPLE_RECRUITMENT_DEADLINE,
-                64,
-                "OPEN"
+                64
         );
     }
 
@@ -73,12 +72,12 @@ class TournamentServiceTest {
         return new TournamentUpdateRequest(
                 JsonNullable.undefined(), JsonNullable.undefined(),
                 JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined());
     }
 
     private Tournament newRealTournament() {
         return Tournament.create(
-                "STREET FIGHTER 6 CUP", 3, SAMPLE_START_AT, SAMPLE_RECRUITMENT_DEADLINE, 64, "OPEN");
+                "STREET FIGHTER 6 CUP", 3, SAMPLE_START_AT, SAMPLE_RECRUITMENT_DEADLINE, 64);
     }
 
     private Tournament mockTournament() {
@@ -90,7 +89,6 @@ class TournamentServiceTest {
         when(tournament.getStartAt()).thenReturn(SAMPLE_START_AT);
         when(tournament.getRecruitmentDeadline()).thenReturn(SAMPLE_RECRUITMENT_DEADLINE);
         when(tournament.getMaxPlayers()).thenReturn(64);
-        when(tournament.getStatus()).thenReturn("OPEN");
         when(tournament.getCreatedAt()).thenReturn(now);
         when(tournament.getUpdatedAt()).thenReturn(now);
         return tournament;
@@ -109,7 +107,6 @@ class TournamentServiceTest {
         assertEquals("STREET FIGHTER 6 CUP", response.name());
         assertEquals(3, response.teamSize());
         assertEquals(64, response.maxPlayers());
-        assertEquals("OPEN", response.status());
     }
 
     @Test
@@ -155,7 +152,6 @@ class TournamentServiceTest {
         assertEquals(SAMPLE_START_AT, response.startAt());
         assertEquals(SAMPLE_RECRUITMENT_DEADLINE, response.recruitmentDeadline());
         assertEquals(64, response.maxPlayers());
-        assertEquals("OPEN", response.status());
 
         ArgumentCaptor<Tournament> tournamentCaptor = ArgumentCaptor.forClass(Tournament.class);
         verify(tournamentRepository, times(1)).save(tournamentCaptor.capture());
@@ -163,7 +159,6 @@ class TournamentServiceTest {
         assertEquals(3, tournamentCaptor.getValue().getTeamSize());
         assertEquals(SAMPLE_RECRUITMENT_DEADLINE, tournamentCaptor.getValue().getRecruitmentDeadline());
         assertEquals(64, tournamentCaptor.getValue().getMaxPlayers());
-        assertEquals("OPEN", tournamentCaptor.getValue().getStatus());
     }
 
     @Test
@@ -196,7 +191,7 @@ class TournamentServiceTest {
         when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(admin));
 
         TournamentCreateRequest request = new TournamentCreateRequest(
-                "STREET FIGHTER 6 CUP", 3, SAMPLE_START_AT, SAMPLE_START_AT, 64, "OPEN");
+                "STREET FIGHTER 6 CUP", 3, SAMPLE_START_AT, SAMPLE_START_AT, 64);
 
         InvalidRequestException exception = assertThrows(
                 InvalidRequestException.class,
@@ -212,7 +207,7 @@ class TournamentServiceTest {
         when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(admin));
 
         TournamentCreateRequest request = new TournamentCreateRequest(
-                "STREET FIGHTER 6 CUP", 3, SAMPLE_START_AT, SAMPLE_START_AT.plusMinutes(1), 64, "OPEN");
+                "STREET FIGHTER 6 CUP", 3, SAMPLE_START_AT, SAMPLE_START_AT.plusMinutes(1), 64);
 
         assertThrows(
                 InvalidRequestException.class,
@@ -234,7 +229,6 @@ class TournamentServiceTest {
                 JsonNullable.undefined(),
                 JsonNullable.undefined(),
                 JsonNullable.undefined(),
-                JsonNullable.undefined(),
                 JsonNullable.undefined()
         );
 
@@ -246,7 +240,6 @@ class TournamentServiceTest {
         assertEquals(SAMPLE_START_AT, response.startAt());
         assertEquals(SAMPLE_RECRUITMENT_DEADLINE, response.recruitmentDeadline());
         assertEquals(64, response.maxPlayers());
-        assertEquals("OPEN", response.status());
         verify(tournamentRepository, times(1)).flush();
     }
 
@@ -293,7 +286,6 @@ class TournamentServiceTest {
                 JsonNullable.undefined(),
                 JsonNullable.of(LocalDateTime.of(2026, 9, 30, 0, 0)),
                 JsonNullable.undefined(),
-                JsonNullable.undefined(),
                 JsonNullable.undefined()
         );
 
@@ -320,7 +312,6 @@ class TournamentServiceTest {
                 JsonNullable.undefined(),
                 JsonNullable.undefined(),
                 JsonNullable.of(LocalDateTime.of(2026, 10, 2, 0, 0)),
-                JsonNullable.undefined(),
                 JsonNullable.undefined()
         );
 
@@ -347,7 +338,6 @@ class TournamentServiceTest {
                 JsonNullable.undefined(),
                 JsonNullable.of(newStartAt),
                 JsonNullable.of(newDeadline),
-                JsonNullable.undefined(),
                 JsonNullable.undefined()
         );
 

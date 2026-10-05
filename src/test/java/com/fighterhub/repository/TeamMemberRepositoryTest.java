@@ -368,8 +368,7 @@ class TeamMemberRepositoryTest {
                 3,
                 LocalDateTime.now(),
                 LocalDateTime.now().minusDays(1),
-                24,
-                "OPEN"
+                24
         ));
         createdTournamentIds.add(tournament.getId());
 

@@ -22,9 +22,6 @@ public record TournamentCreateRequest(
 
     @NotNull
     @Positive
-    Integer maxPlayers,
-
-    @NotBlank
-    String status
+    Integer maxPlayers
 ) {
 }

@@ -17,7 +17,6 @@ const sampleTournament: Tournament = {
   startAt: '2026-10-10T13:00:00',
   recruitmentDeadline: '2026-10-05T23:59:00',
   maxPlayers: 64,
-  status: 'OPEN',
   createdAt: '2026-09-01T00:00:00',
   updatedAt: '2026-09-01T00:00:00',
 }

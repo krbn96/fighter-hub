@@ -390,8 +390,7 @@ class RecruitmentApplicationConcurrencyTest {
                 teamSize,
                 LocalDateTime.now().plusDays(2),
                 LocalDateTime.now().plusDays(1),
-                24,
-                "OPEN"
+                24
         ));
         createdTournamentIds.add(tournament.getId());
 

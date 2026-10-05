@@ -9,7 +9,6 @@ public record TournamentResponse(
     LocalDateTime startAt,
     LocalDateTime recruitmentDeadline,
     Integer maxPlayers,
-    String status,
     LocalDateTime createdAt,
     LocalDateTime updatedAt
 ) {

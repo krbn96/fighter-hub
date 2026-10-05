@@ -77,7 +77,6 @@ class TournamentControllerTest {
                 LocalDateTime.of(2026, 10, 1, 19, 0),
                 LocalDateTime.of(2026, 9, 30, 23, 59),
                 64,
-                "OPEN",
                 LocalDateTime.of(2026, 1, 1, 0, 0),
                 LocalDateTime.of(2026, 1, 2, 0, 0)
         );
@@ -93,7 +92,6 @@ class TournamentControllerTest {
                 .andExpect(jsonPath("$[0].name").value("STREET FIGHTER 6 CUP"))
                 .andExpect(jsonPath("$[0].teamSize").value(3))
                 .andExpect(jsonPath("$[0].maxPlayers").value(64))
-                .andExpect(jsonPath("$[0].status").value("OPEN"))
                 .andExpect(jsonPath("$[0].recruitmentDeadline").value("2026-09-30T23:59:00"));
     }
 
@@ -179,8 +177,7 @@ class TournamentControllerTest {
                   "teamSize": 3,
                   "startAt": "2026-10-01T19:00:00",
                   "recruitmentDeadline": "2026-09-30T23:59:00",
-                  "maxPlayers": 64,
-                  "status": "OPEN"
+                  "maxPlayers": 64
                 }
                 """;
 
@@ -207,8 +204,7 @@ class TournamentControllerTest {
                   "teamSize": 3,
                   "startAt": "2026-10-01T19:00:00",
                   "recruitmentDeadline": "2026-09-30T23:59:00",
-                  "maxPlayers": 64,
-                  "status": "OPEN"
+                  "maxPlayers": 64
                 }
                 """;
 
@@ -233,8 +229,7 @@ class TournamentControllerTest {
                   "teamSize": 3,
                   "startAt": "2026-10-01T19:00:00",
                   "recruitmentDeadline": "2026-09-30T23:59:00",
-                  "maxPlayers": 64,
-                  "status": "OPEN"
+                  "maxPlayers": 64
                 }
                 """;
 
@@ -258,8 +253,7 @@ class TournamentControllerTest {
                   "teamSize": 3,
                   "startAt": "2026-10-01T19:00:00",
                   "recruitmentDeadline": "2026-09-30T23:59:00",
-                  "maxPlayers": 64,
-                  "status": "OPEN"
+                  "maxPlayers": 64
                 }
                 """;
 
@@ -281,8 +275,7 @@ class TournamentControllerTest {
                   "teamSize": 3,
                   "startAt": "2026-10-01T19:00:00",
                   "recruitmentDeadline": "2026-09-30T23:59:00",
-                  "maxPlayers": 64,
-                  "status": "OPEN"
+                  "maxPlayers": 64
                 }
                 """;
 

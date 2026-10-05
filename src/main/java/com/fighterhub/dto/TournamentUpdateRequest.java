@@ -24,10 +24,7 @@ public record TournamentUpdateRequest(
 
     @NotNull
     @Positive
-    JsonNullable<Integer> maxPlayers,
-
-    @NotBlank
-    JsonNullable<String> status
+    JsonNullable<Integer> maxPlayers
 ) {
     public TournamentUpdateRequest {
         name = normalize(name);
@@ -35,7 +32,6 @@ public record TournamentUpdateRequest(
         startAt = normalize(startAt);
         recruitmentDeadline = normalize(recruitmentDeadline);
         maxPlayers = normalize(maxPlayers);
-        status = normalize(status);
     }
 
     private static <T> JsonNullable<T> normalize(JsonNullable<T> value) {

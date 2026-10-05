@@ -1700,7 +1700,6 @@ components:
         - startAt
         - recruitmentDeadline
         - maxPlayers
-        - status
         - createdAt
         - updatedAt
       properties:
@@ -1735,10 +1734,6 @@ components:
           type: integer
           description: 大会の最大参加人数
           example: 64
-        status:
-          type: string
-          description: 大会ステータス(自由文字列)。将来的に削除予定であり、募集状態の判定には使用しない(recruitmentDeadlineを参照すること)。
-          example: OPEN
         createdAt:
           type: string
           format: date-time
@@ -1757,7 +1752,6 @@ components:
         - startAt
         - recruitmentDeadline
         - maxPlayers
-        - status
       properties:
         name:
           type: string
@@ -1785,10 +1779,6 @@ components:
           minimum: 1
           description: 大会の最大参加人数
           example: 64
-        status:
-          type: string
-          description: 大会ステータス
-          example: OPEN
     TournamentUpdateRequest:
       type: object
       description: 部分更新用リクエスト。指定したフィールドのみ更新され、省略したフィールドは変更されない。すべてNOT NULL項目のため、明示的にnullを指定した場合は400になる。
@@ -1820,10 +1810,6 @@ components:
           minimum: 1
           description: 大会の最大参加人数（指定する場合は1以上）
           example: 64
-        status:
-          type: string
-          description: 大会ステータス（指定する場合は空文字不可）
-          example: OPEN
     TeamResponse:
       type: object
       required:

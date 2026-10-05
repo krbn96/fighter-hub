@@ -56,8 +56,7 @@ public class TournamentService {
                 request.teamSize(),
                 request.startAt(),
                 request.recruitmentDeadline(),
-                request.maxPlayers(),
-                request.status()
+                request.maxPlayers()
         );
         Tournament savedTournament = tournamentRepository.save(tournament);
 
@@ -89,10 +88,6 @@ public class TournamentService {
 
         if (!request.maxPlayers().isUndefined()) {
             tournament.updateMaxPlayers(request.maxPlayers().get());
-        }
-
-        if (!request.status().isUndefined()) {
-            tournament.updateStatus(request.status().get());
         }
 
         // PATCHでは「startAtだけ変更」「recruitmentDeadlineだけ変更」「両方変更」のいずれも
@@ -144,7 +139,6 @@ public class TournamentService {
                 tournament.getStartAt(),
                 tournament.getRecruitmentDeadline(),
                 tournament.getMaxPlayers(),
-                tournament.getStatus(),
                 tournament.getCreatedAt(),
                 tournament.getUpdatedAt()
         );
