@@ -30,6 +30,11 @@ const router = createRouter({
       component: () => import('../views/LoginView.vue'),
     },
     {
+      path: '/register',
+      name: 'register',
+      component: () => import('../views/RegisterView.vue'),
+    },
+    {
       path: '/mypage',
       name: 'mypage',
       component: () => import('../views/MyPageView.vue'),
@@ -102,10 +107,10 @@ router.beforeEach((to) => {
     return '/login'
   }
 
-  // ログイン済みユーザーが/loginへ直接アクセスした場合は/mypageへ戻す。
+  // ログイン済みユーザーが/login・/registerへ直接アクセスした場合は/mypageへ戻す。
   // /mypageはrequiresAuth: trueだがログイン済みのため上の条件には掛からず、
-  // 再度/loginへ戻されることはない(redirect loopにならない)。
-  if (to.name === 'login' && authStore.isAuthenticated) {
+  // 再度/login・/registerへ戻されることはない(redirect loopにならない)。
+  if ((to.name === 'login' || to.name === 'register') && authStore.isAuthenticated) {
     return '/mypage'
   }
 })

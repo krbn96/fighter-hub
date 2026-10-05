@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
 import LoginView from '../LoginView.vue'
@@ -18,12 +18,14 @@ import { login as loginRequest } from '@/api/auth'
 import { fetchMe } from '@/api/user'
 
 const push = vi.fn<(path: string) => void>()
+let currentQuery: Record<string, string> = {}
 
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('vue-router')>()
   return {
     ...actual,
     useRouter: () => ({ push }),
+    useRoute: () => ({ query: currentQuery }),
   }
 })
 
@@ -41,19 +43,26 @@ const dummyUser: UserMe = {
   updatedAt: '2026-09-01T00:00:00',
 }
 
+function mountLoginView() {
+  return mount(LoginView, {
+    global: { stubs: { RouterLink: RouterLinkStub } },
+  })
+}
+
 describe('LoginView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.mocked(loginRequest).mockReset()
     vi.mocked(fetchMe).mockReset()
     push.mockReset()
+    currentQuery = {}
   })
 
   it('ログイン成功時にauthStore.loginが呼ばれ、成功後/mypageへ遷移する', async () => {
     vi.mocked(loginRequest).mockResolvedValue({ accessToken: 'token-123' })
     vi.mocked(fetchMe).mockResolvedValue(dummyUser)
 
-    const wrapper = mount(LoginView)
+    const wrapper = mountLoginView()
     const authStore = useAuthStore()
     const loginSpy = vi.spyOn(authStore, 'login')
 
@@ -75,7 +84,7 @@ describe('LoginView', () => {
     )
     vi.mocked(fetchMe).mockResolvedValue(dummyUser)
 
-    const wrapper = mount(LoginView)
+    const wrapper = mountLoginView()
 
     await wrapper.find('#email').setValue('test@example.com')
     await wrapper.find('#password').setValue('password123')
@@ -92,7 +101,7 @@ describe('LoginView', () => {
   it('ログイン失敗時に既存のエラーメッセージが表示され、/mypageへ遷移しない', async () => {
     vi.mocked(loginRequest).mockRejectedValue(new Error('Invalid email or password.'))
 
-    const wrapper = mount(LoginView)
+    const wrapper = mountLoginView()
 
     await wrapper.find('#email').setValue('test@example.com')
     await wrapper.find('#password').setValue('wrong-password')
@@ -101,5 +110,28 @@ describe('LoginView', () => {
 
     expect(wrapper.text()).toContain('メールアドレスまたはパスワードが正しくありません')
     expect(push).not.toHaveBeenCalled()
+  })
+
+  it('/login?registered=trueの場合のみ登録成功メッセージを表示する', () => {
+    currentQuery = { registered: 'true' }
+
+    const wrapper = mountLoginView()
+
+    expect(wrapper.text()).toContain('アカウントを作成しました。ログインしてください。')
+  })
+
+  it('通常の/login(registeredクエリなし)では登録成功メッセージを表示しない', () => {
+    currentQuery = {}
+
+    const wrapper = mountLoginView()
+
+    expect(wrapper.text()).not.toContain('アカウントを作成しました。ログインしてください。')
+  })
+
+  it('新規登録画面(/register)へのリンクを表示する', () => {
+    const wrapper = mountLoginView()
+
+    const link = wrapper.findComponent(RouterLinkStub)
+    expect(link.props('to')).toBe('/register')
   })
 })

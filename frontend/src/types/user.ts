@@ -47,3 +47,27 @@ export interface UserUpdateRequest {
   playTimeEnd: string | null
   message: string | null
 }
+
+// バックエンドの UserCreateRequest内のcharacters要素(UserCharacterRequest)に対応する型。
+// UserCharacterと異なりcharacterIdはnullを許容しない(新規登録では必ず実IDを送る)。
+export interface UserCreateCharacterRequest {
+  characterId: number
+  rank: string
+  mr: number | null
+}
+
+// バックエンドの UserCreateRequest(POST /api/users)に対応する型。
+export interface UserCreateRequest {
+  email: string
+  password: string
+  name: string
+  characters: UserCreateCharacterRequest[]
+  playTimeStart: string | null
+  playTimeEnd: string | null
+  message: string | null
+}
+
+// バックエンドの UserCreateResponse(POST /api/users)に対応する型。
+export interface UserCreateResponse {
+  id: number
+}

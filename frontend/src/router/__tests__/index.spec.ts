@@ -48,4 +48,19 @@ describe('router guard', () => {
 
     expect(router.currentRoute.value.path).toBe('/mypage')
   })
+
+  it('未ログインで/registerへアクセスすると/registerがそのまま表示される', async () => {
+    await router.push('/register')
+
+    expect(router.currentRoute.value.path).toBe('/register')
+  })
+
+  it('ログイン済みで/registerへアクセスすると/mypageへリダイレクトされる', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+
+    await router.push('/register')
+
+    expect(router.currentRoute.value.path).toBe('/mypage')
+  })
 })
