@@ -196,10 +196,16 @@ API仕様はJava実装（Controller / DTO / Validation等）をSource of Truth�
 
 ## Development Environment
 
-- Java 21
-- PostgreSQL 18
-- Docker / Docker Compose
-- Maven Wrapper
+Docker Composeでアプリ全体を起動する場合、ホスト側に必要なのは基本的に以下の2つだけです。
+
+- Git
+- Docker Desktop（Docker Composeを含む）
+
+Backend / Frontendをホスト上で個別に起動して開発する場合は、上記に加えて以下が追加で必要です。
+
+- Java 21（Maven自体のインストールは不要です。Maven WrapperがBackendのbuild/起動に必要なMavenを自動で取得します）
+- Node.js（`frontend/package.json` の `engines.node` に記載のバージョンを参照してください）
+- PostgreSQL 18（Docker版PostgreSQLはhostへportを公開していないため、個別起動時は別途ローカルに用意してください）
 
 ## Setup
 
@@ -223,6 +229,8 @@ cp .env.example .env
 - `DB_PASSWORD`: PostgreSQLの接続パスワード（任意の文字列）
 - `JWT_SECRET`: JWT署名用secret。Base64エンコードされた32byte（256bit）以上の値が必要です（生成例: `openssl rand -base64 32`）
 
+> DB_PASSWORDには任意のパスワードを設定できます。初回起動時にPostgreSQLの認証情報として使用されます。PostgreSQLのデータを保存するDocker volume作成後に値を変更すると、既存DBへ接続できなくなる場合があるため注意してください。
+
 ### 3. Start with Docker Compose（推奨）
 
 ```bash
@@ -230,6 +238,16 @@ docker compose up --build
 ```
 
 起動後、ブラウザから `http://localhost` へアクセスしてください。Frontend（Nginx）が `/api` 宛のリクエストを同一オリジンでBackendへreverse proxyするため、CORS設定は不要です。
+
+> すでに別のWebサーバー等がport 80を使用している場合、上記コマンドが `port is already allocated` のようなエラーで失敗することがあります。この場合は `compose.yaml` の `frontend.ports` を `"8080:80"` のように別のhost側portへ変更してください（アクセスURLは `http://localhost:8080` になります）。
+
+### 4. Stop
+
+```bash
+docker compose down
+```
+
+で停止できます。`-v` オプション（`docker compose down -v`）を付けるとPostgreSQLのデータを保存しているnamed volumeも削除され、保存済みデータがすべて消えてしまうため、通常は付けないでください。
 
 ### ローカル開発時の個別起動（Docker無し）
 
