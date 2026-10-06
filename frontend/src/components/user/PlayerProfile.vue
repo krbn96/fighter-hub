@@ -1,13 +1,38 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
+import DiscordIcon from '@/components/ui/DiscordIcon.vue'
 import type { UserMe, UserPublic } from '@/types/user'
 
 // API通信は行わないpresentational component。
 // characterNamesは呼び出し元がGET /api/charactersを1回取得して作ったMap(characterId -> name)を渡す前提。
-const props = defineProps<{
-  user: UserMe | UserPublic
-  characterNames: Map<number, string>
+// showDiscordActions: MY PAGE(自分自身のプロフィール)としての表示かどうかを呼び出し元が
+// 判別して渡す。trueの場合のみDiscordの連携/連携解除ボタンを表示する(公開プロフィールでは
+// 常にfalseで、表示のみになる)。OAuth API通信はこのコンポーネントへ持ち込まず、
+// discordLink/discordUnlinkイベントをemitして呼び出し元(MyPageView)へ委譲する。
+// discordMessage/discordMessageTypeもMY PAGE専用(showDiscordActions=falseの場合は
+// 呼び出し元が渡さない前提。公開プロフィールにはメッセージ表示機能を持ち込まない)。
+const props = withDefaults(
+  defineProps<{
+    user: UserMe | UserPublic
+    characterNames: Map<number, string>
+    showDiscordActions?: boolean
+    discordUnlinking?: boolean
+    discordMessage?: string
+    discordMessageType?: 'success' | 'error'
+  }>(),
+  {
+    showDiscordActions: false,
+    discordUnlinking: false,
+    discordMessage: '',
+    discordMessageType: 'success',
+  },
+)
+
+const emit = defineEmits<{
+  discordLink: []
+  discordUnlink: []
 }>()
 
 // backendのLocalTimeは"HH:mm:ss"形式の文字列で届くため、表示用に"HH:mm"へ整形する。
@@ -34,6 +59,44 @@ function characterName(characterId: number): string {
   return props.characterNames.get(characterId) ?? '不明なキャラクター'
 }
 
+// Discord usernameクリックコピー。コピーするのは公開用discordUsernameのみで、
+// discordId(内部識別子)はこのコンポーネント/Frontendのどこにも保持していない。
+// Discord OAuthのsuccess/error message(discordMessage prop)とは別物であり、
+// ページ全体のmessage領域は使わず、username付近に小さく一時表示する。
+const showCopyFeedback = ref(false)
+let copyFeedbackTimer: ReturnType<typeof setTimeout> | undefined
+
+async function copyDiscordUsername() {
+  const username = props.user.discordUsername
+  if (!username) {
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(username)
+  } catch {
+    // コピーに失敗した場合は「コピーしました」を表示しない。機密情報ではないが、
+    // 詳細なエラー内容をconsoleへ出力する必要も無いため何もしない。
+    return
+  }
+
+  // 連続クリック時は「最後に成功したコピーから約2秒」表示されるようtimerをリセットする。
+  if (copyFeedbackTimer !== undefined) {
+    clearTimeout(copyFeedbackTimer)
+  }
+  showCopyFeedback.value = true
+  copyFeedbackTimer = setTimeout(() => {
+    showCopyFeedback.value = false
+    copyFeedbackTimer = undefined
+  }, 2000)
+}
+
+onUnmounted(() => {
+  if (copyFeedbackTimer !== undefined) {
+    clearTimeout(copyFeedbackTimer)
+  }
+})
+
 // FIGHTER HUBの仕様上MRはrank===MASTERの場合のみ意味を持つ。
 // 既存DBにMASTER以外でmrが設定された不整合データが存在してもここでは表示しない。
 
@@ -48,6 +111,63 @@ const subCharacters = computed(() => props.user.characters.slice(1))
   <div class="player-profile">
     <BaseCard class="player-profile__summary">
       <h2 class="player-profile__name">{{ user.name }}</h2>
+
+      <!-- discordUsername==nullかつ公開プロフィール(showDiscordActions=false)の場合は
+           Discord欄自体を表示しない(内部識別子であるdiscordIdはbackendが公開しないため、
+           Frontend側にも一切保持・表示しない)。MY PAGE(showDiscordActions=true)では
+           未連携でも「Discordと連携」導線として常にDiscord行を表示する。 -->
+      <div v-if="user.discordUsername" class="player-profile__discord">
+        <DiscordIcon connected class="player-profile__discord-icon" />
+        <span class="player-profile__discord-username-wrapper">
+          <button
+            type="button"
+            class="player-profile__discord-username"
+            @click="copyDiscordUsername"
+          >
+            {{ user.discordUsername }}
+          </button>
+          <span v-if="showCopyFeedback" class="player-profile__discord-copy-feedback" role="status">
+            コピーしました
+          </span>
+        </span>
+        <BaseButton
+          v-if="showDiscordActions"
+          type="button"
+          variant="secondary"
+          class="player-profile__discord-button"
+          :disabled="discordUnlinking"
+          @click="emit('discordUnlink')"
+        >
+          {{ discordUnlinking ? '解除中...' : '連携解除' }}
+        </BaseButton>
+        <span
+          v-if="showDiscordActions && discordMessage"
+          class="player-profile__discord-message"
+          :class="`player-profile__discord-message--${discordMessageType}`"
+          :role="discordMessageType === 'error' ? 'alert' : undefined"
+        >
+          {{ discordMessage }}
+        </span>
+      </div>
+      <div v-else-if="showDiscordActions" class="player-profile__discord">
+        <DiscordIcon class="player-profile__discord-icon" />
+        <BaseButton
+          type="button"
+          variant="secondary"
+          class="player-profile__discord-button"
+          @click="emit('discordLink')"
+        >
+          Discordと連携
+        </BaseButton>
+        <span
+          v-if="discordMessage"
+          class="player-profile__discord-message"
+          :class="`player-profile__discord-message--${discordMessageType}`"
+          :role="discordMessageType === 'error' ? 'alert' : undefined"
+        >
+          {{ discordMessage }}
+        </span>
+      </div>
 
       <div class="player-profile__field">
         <span class="player-profile__field-label">PLAY TIME</span>
@@ -140,6 +260,94 @@ const subCharacters = computed(() => props.user.characters.slice(1))
 
 .player-profile__name {
   margin: 0;
+}
+
+.player-profile__discord {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  /* Discord公式ブランドカラー(Blurple)。DiscordIconと同じ値。 */
+  color: #5865f2;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.player-profile__discord-icon {
+  width: 1.2em;
+  height: 0.95em;
+}
+
+/* positionの基準にするだけのinline wrapper。レイアウトへの影響は無い。 */
+.player-profile__discord-username-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+/* button要素だがusernameの見た目はそのまま維持し、大きなボタンに見えないようにする
+   (既定のbutton装飾をすべて打ち消し、親から色・フォントを継承する)。 */
+.player-profile__discord-username {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.player-profile__discord-username:hover,
+.player-profile__discord-username:focus-visible {
+  text-decoration: underline;
+}
+
+.player-profile__discord-username:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* 「コピーしました」の小さな吹き出し。absolute positioningでusername/連携解除ボタンを
+   押し出さないようにする。--color-text/--color-bgを反転利用し、light/dark両themeで
+   それぞれ十分なコントラストの吹き出し背景色になる。 */
+.player-profile__discord-copy-feedback {
+  position: absolute;
+  bottom: calc(100% + var(--space-1));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.player-profile__discord-button {
+  margin-left: var(--space-2);
+  font-size: 0.75rem;
+  padding: var(--space-1) var(--space-3);
+}
+
+/* 操作ボタンの右側に表示するDiscord連携/解除の結果メッセージ。success/errorとも
+   同じ位置を使い、狭い画面や長い文言では折り返す(flex-wrapにより自然に次の行へ送られる)。 */
+.player-profile__discord-message {
+  margin-left: var(--space-2);
+  font-size: 0.8rem;
+  font-weight: 400;
+  white-space: normal;
+}
+
+.player-profile__discord-message--success {
+  color: var(--color-success);
+}
+
+.player-profile__discord-message--error {
+  color: var(--color-error);
 }
 
 .player-profile__field {

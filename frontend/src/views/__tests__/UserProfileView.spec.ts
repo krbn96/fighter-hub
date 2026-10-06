@@ -60,7 +60,7 @@ describe('UserProfileView', () => {
     expect(text).toContain('MR 1650')
   })
 
-  it('emailやMy Teams/My Applications導線、xId/discordUsernameを表示しない', async () => {
+  it('emailやMy Teams/My Applications導線、xId(内部値)を表示しない', async () => {
     vi.mocked(fetchUserById).mockResolvedValue(samplePublicUser)
     vi.mocked(fetchCharacters).mockResolvedValue(sampleCharacters)
 
@@ -72,8 +72,30 @@ describe('UserProfileView', () => {
     expect(text).not.toContain('MY TEAMS')
     expect(text).not.toContain('MY APPLICATIONS')
     expect(text).not.toContain('somexid')
-    expect(text).not.toContain('some#1234')
     expect(wrapper.html()).not.toContain('email')
+    // discordIdという内部識別子はPublic型自体に存在しないため、コンポーネントが
+    // 誤って扱っていないことをUserPublic型のキー一覧で確認する。
+    expect(Object.keys(samplePublicUser)).not.toContain('discordId')
+  })
+
+  it('discordUsernameがある場合はDiscordユーザー名を表示する', async () => {
+    vi.mocked(fetchUserById).mockResolvedValue(samplePublicUser)
+    vi.mocked(fetchCharacters).mockResolvedValue(sampleCharacters)
+
+    const wrapper = mount(UserProfileView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('some#1234')
+  })
+
+  it('discordUsernameがnullの場合はDiscord欄を表示しない', async () => {
+    vi.mocked(fetchUserById).mockResolvedValue({ ...samplePublicUser, discordUsername: null })
+    vi.mocked(fetchCharacters).mockResolvedValue(sampleCharacters)
+
+    const wrapper = mount(UserProfileView)
+    await flushPromises()
+
+    expect(wrapper.find('.player-profile__discord').exists()).toBe(false)
   })
 
   it('404時に専用のnot found表示になる', async () => {
