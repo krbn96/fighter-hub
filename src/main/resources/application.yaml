@@ -14,3 +14,15 @@ spring:
 jwt:
   secret: ${JWT_SECRET}
   expiration: 24h
+
+discord:
+  client-id: ${DISCORD_CLIENT_ID}
+  client-secret: ${DISCORD_CLIENT_SECRET}
+  redirect-uri: ${DISCORD_REDIRECT_URI}
+
+oauth:
+  state:
+    secret: ${OAUTH_STATE_SECRET}
+
+frontend:
+  base-url: ${FRONTEND_BASE_URL}

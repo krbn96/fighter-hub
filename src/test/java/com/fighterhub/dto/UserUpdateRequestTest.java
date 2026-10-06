@@ -44,8 +44,6 @@ class UserUpdateRequestTest {
         assertTrue(request.playTimeStart().isUndefined());
         assertTrue(request.playTimeEnd().isUndefined());
         assertTrue(request.message().isUndefined());
-        assertTrue(request.xId().isUndefined());
-        assertTrue(request.discordId().isUndefined());
     }
 
     // ==== デシリアライズ: nullable項目で未指定と明示的nullを区別できること ====
@@ -96,15 +94,13 @@ class UserUpdateRequestTest {
     @Test
     void new_JsonNullableを渡さずnull参照で構築した場合_undefinedへ正規化される() {
         UserUpdateRequest request = new UserUpdateRequest(
-                null, null, null, null, null, null, null);
+                null, null, null, null, null);
 
         assertTrue(request.name().isUndefined());
         assertTrue(request.characters().isUndefined());
         assertTrue(request.playTimeStart().isUndefined());
         assertTrue(request.playTimeEnd().isUndefined());
         assertTrue(request.message().isUndefined());
-        assertTrue(request.xId().isUndefined());
-        assertTrue(request.discordId().isUndefined());
     }
 
     // ==== Bean Validation: name ====
@@ -113,7 +109,7 @@ class UserUpdateRequestTest {
     void validate_nameが未指定の場合_違反なし() {
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(), validCharacters(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined());
 
         assertTrue(newValidator().validate(request).isEmpty());
     }
@@ -243,7 +239,7 @@ class UserUpdateRequestTest {
     void validate_playTimeStartが明示的nullの場合_違反なし() {
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(), validCharacters(), JsonNullable.of(null),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined());
 
         assertTrue(newValidator().validate(request).isEmpty());
     }
@@ -252,7 +248,7 @@ class UserUpdateRequestTest {
     void validate_messageが明示的nullの場合_違反なし() {
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(), validCharacters(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.of(null), JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.of(null));
 
         assertTrue(newValidator().validate(request).isEmpty());
     }
@@ -266,12 +262,12 @@ class UserUpdateRequestTest {
     private static UserUpdateRequest withName(JsonNullable<String> name) {
         return new UserUpdateRequest(
                 name, validCharacters(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined());
     }
 
     private static UserUpdateRequest withCharacters(JsonNullable<List<UserCharacterRequest>> characters) {
         return new UserUpdateRequest(
                 JsonNullable.undefined(), characters, JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined());
     }
 }

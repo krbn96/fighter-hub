@@ -180,22 +180,44 @@ class UserTest {
     }
 
     @Test
-    void updateDiscordId_値からnullへ更新できる() {
+    void linkDiscordAccount_discordIdとdiscordUsernameを同時に設定できる() {
         User user = newUserWithFourCharacters();
-        user.updateDiscordId("olddiscord#1234");
 
-        user.updateDiscordId(null);
+        user.linkDiscordAccount("123456789", "testuser");
 
-        assertNull(user.getDiscordId());
+        assertEquals("123456789", user.getDiscordId());
+        assertEquals("testuser", user.getDiscordUsername());
     }
 
     @Test
-    void updateDiscordId_値から別の値へ更新できる() {
+    void linkDiscordAccount_既存の連携を別のDiscordアカウントへ更新できる() {
         User user = newUserWithFourCharacters();
-        user.updateDiscordId("old#1234");
+        user.linkDiscordAccount("old-id", "old-username");
 
-        user.updateDiscordId("new#5678");
+        user.linkDiscordAccount("new-id", "new-username");
 
-        assertEquals("new#5678", user.getDiscordId());
+        assertEquals("new-id", user.getDiscordId());
+        assertEquals("new-username", user.getDiscordUsername());
+    }
+
+    @Test
+    void unlinkDiscordAccount_discordIdとdiscordUsernameを同時にnullにできる() {
+        User user = newUserWithFourCharacters();
+        user.linkDiscordAccount("123456789", "testuser");
+
+        user.unlinkDiscordAccount();
+
+        assertNull(user.getDiscordId());
+        assertNull(user.getDiscordUsername());
+    }
+
+    @Test
+    void unlinkDiscordAccount_未連携状態で呼んでも例外にならない() {
+        User user = newUserWithFourCharacters();
+
+        user.unlinkDiscordAccount();
+
+        assertNull(user.getDiscordId());
+        assertNull(user.getDiscordUsername());
     }
 }

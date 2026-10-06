@@ -62,6 +62,72 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /oauth/discord/authorize:
+    post:
+      summary: Discordアカウント連携開始
+      description: >-
+        Discord OAuth Authorization Code Flow(scope=identify)を開始するためのAuthorization URLを
+        発行する。Discordへの302 redirectはこのAPI自体では行わない(JWT認証が必要なため、
+        ブラウザの直接navigationではAuthorizationヘッダーを付けられない)。Frontendは
+        レスポンスのauthorizationUrlへ自身でnavigateする。
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 発行成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordAuthorizeResponse'
+
+        '401':
+          description: 認証されていない、または無効なJWT
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth/discord/callback:
+    get:
+      summary: Discord OAuth callback
+      description: >-
+        Discordから呼び出されるcallback。このエンドポイントのみ認証不要(permitAll)。
+        state(署名・expiration・purposeを検証)・authorization codeの検証・token交換・
+        /users/@me取得・FIGHTER HUBユーザーへの連携(または付け替え)を行い、
+        結果に応じてFRONTEND_BASE_URL配下の/mypageへ302 redirectする(JSONは返さない)。
+        Discordのaccess/refresh tokenは保存せず、このリクエストの処理中のみ使用して破棄する。
+        Discordから返されたerror_descriptionやJava例外メッセージはredirect URLへ含めず、
+        固定のreasonコード(cancelled/invalid_state/expired_state/provider_error/server_error)
+        のみを使用する。
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Discordから返された認可コード(ユーザーが認可を拒否した場合は付与されない)
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+          description: POST /api/oauth/discord/authorizeで発行した署名付きstate
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+          description: ユーザーがDiscordの認可を拒否した場合等にDiscordから付与される(例 access_denied)
+      responses:
+        '302':
+          description: >-
+            FRONTEND_BASE_URL配下の/mypageへredirectする。
+            成功時: ?oauth=discord&result=success
+            失敗時: ?oauth=discord&result=error&reason=<固定reason>
+
   /users/{id}:
     get:
       summary: ユーザー公開プロフィール取得
@@ -173,6 +239,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+        '401':
+          description: 認証されていない、または無効なJWT
+
+        '404':
+          description: JWTのsubに対応するユーザーが存在しない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '500':
+          description: サーバーエラー
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/me/discord:
+    delete:
+      summary: Discordアカウント連携解除
+      description: >-
+        認証済みユーザー自身のDiscordアカウント連携を解除する(discord_id/discord_usernameを
+        同時にNULLへ戻す)。未連携状態で呼んでも成功扱いとする冪等API。
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: 解除成功(未連携状態だった場合も含む)
 
         '401':
           description: 認証されていない、または無効なJWT
@@ -1321,6 +1416,19 @@ components:
           format: int64
           description: 登録されたユーザーのID
           example: 1
+    DiscordAuthorizeResponse:
+      type: object
+      required:
+        - authorizationUrl
+      properties:
+        authorizationUrl:
+          type: string
+          format: uri
+          description: Frontendがnavigateすべき、Discordの認可画面へのURL(state・redirect_uri等を含む)
+          example: >-
+            https://discord.com/oauth2/authorize?client_id=123456789012345678&response_type=code
+            &redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fapi%2Foauth%2Fdiscord%2Fcallback
+            &scope=identify&state=eyJ1c2VySWQiOjF9.xxxxxxxx
     UserPublicResponse:
       type: object
       required:
@@ -1366,11 +1474,13 @@ components:
           nullable: true
           description: X（旧Twitter）のID
           example: johndoe123
-        discordId:
+        discordUsername:
           type: string
           nullable: true
-          description: DiscordのID
-          example: johndoe#1234
+          description: >-
+            連携済みDiscordアカウントの公開用表示名(username)。内部識別子であるDiscord User ID自体は
+            このAPIを含むいかなるレスポンスにも含まれない。未連携の場合はnull。
+          example: johndoe
         createdAt:
           type: string
           format: date-time
@@ -1432,11 +1542,16 @@ components:
           nullable: true
           description: X（旧Twitter）のID
           example: johndoe123
-        discordId:
+        discordUsername:
           type: string
           nullable: true
-          description: DiscordのID
-          example: johndoe#1234
+          description: >-
+            連携済みDiscordアカウントの公開用表示名(username)。内部識別子であるDiscord User ID自体は
+            このAPIを含むいかなるレスポンスにも含まれない。未連携の場合はnull。
+            連携・付け替え・解除は PATCH /api/users/me ではなく、
+            POST /api/oauth/discord/authorize → GET /api/oauth/discord/callback の
+            OAuthフロー、および DELETE /api/users/me/discord でのみ行う。
+          example: johndoe
         createdAt:
           type: string
           format: date-time
@@ -1449,7 +1564,11 @@ components:
           example: "2026-09-02T00:00:00"
     UserUpdateRequest:
       type: object
-      description: 部分更新用リクエスト。指定したフィールドのみ更新され、省略したフィールドは変更されない。name/charactersは明示的にnullを指定すると400になる。
+      description: >-
+        部分更新用リクエスト。指定したフィールドのみ更新され、省略したフィールドは変更されない。
+        name/charactersは明示的にnullを指定すると400になる。
+        xId/discordIdの直接編集はこのAPIでは提供しない
+        (Discordアカウント連携はPOST /api/oauth/discord/authorize経由のOAuthフローでのみ行う)。
       properties:
         name:
           type: string
@@ -1480,16 +1599,6 @@ components:
           nullable: true
           description: 自己紹介メッセージ
           example: Hello, world!
-        xId:
-          type: string
-          nullable: true
-          description: X（旧Twitter）のID
-          example: johndoe123
-        discordId:
-          type: string
-          nullable: true
-          description: DiscordのID
-          example: johndoe#1234
     TeamMemberResponse:
       type: object
       required:

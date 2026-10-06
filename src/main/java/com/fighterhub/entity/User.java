@@ -86,8 +86,15 @@ public class User {
     @Column(name = "x_id", length = 255)
     private String xId;
 
-    @Column(name = "discord_id", length = 255)
+    // Discord OAuthから取得したDiscord User ID(内部識別子)。FrontendへはAPIレスポンスで
+    // 公開しない(discordUsernameのみを公開する)。1つのDiscordアカウントにつき、連携できる
+    // FIGHTER HUBユーザーは常に1人のみであることをDB制約として保証する。
+    @Column(name = "discord_id", length = 255, unique = true)
     private String discordId;
+
+    // 公開プロフィールに表示するDiscordの表示名(username)。discordIdとセットで更新・解除する。
+    @Column(name = "discord_username", length = 255)
+    private String discordUsername;
 
     @Column(name = "password_hash", length = 255)
     private String passwordHash;
@@ -190,8 +197,18 @@ public class User {
         this.xId = xId;
     }
 
-    public void updateDiscordId(String discordId) {
+    // Discordアカウント連携(新規連携・自分自身への再連携・他Userからの付け替え)で使用する。
+    // discordId/discordUsernameは常にセットで更新する(片方だけの更新経路は提供しない)。
+    public void linkDiscordAccount(String discordId, String discordUsername) {
         this.discordId = discordId;
+        this.discordUsername = discordUsername;
+    }
+
+    // Discordアカウント連携解除で使用する。未連携(discordId == null)の状態で呼んでも
+    // 何も変わらず安全(呼び出し元のDELETE /api/users/me/discordを冪等にするための前提)。
+    public void unlinkDiscordAccount() {
+        this.discordId = null;
+        this.discordUsername = null;
     }
 
     public Long getId() {
@@ -272,6 +289,10 @@ public class User {
 
     public String getDiscordId() {
         return discordId;
+    }
+
+    public String getDiscordUsername() {
+        return discordUsername;
     }
 
     public String getPasswordHash() {

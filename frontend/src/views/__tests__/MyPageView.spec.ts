@@ -27,7 +27,7 @@ const sampleUser: UserMe = {
   message: 'よろしく',
   email: 'test@example.com',
   xId: 'somexid',
-  discordId: 'some#1234',
+  discordUsername: 'some#1234',
   createdAt: '2026-09-01T00:00:00',
   updatedAt: '2026-09-01T00:00:00',
 }

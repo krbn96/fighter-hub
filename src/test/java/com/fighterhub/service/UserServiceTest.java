@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -20,6 +21,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -394,7 +396,7 @@ class UserServiceTest {
         when(user.getPlayTimeEnd()).thenReturn(playTimeEnd);
         when(user.getMessage()).thenReturn("よろしくお願いします");
         when(user.getXId()).thenReturn("testxid");
-        when(user.getDiscordId()).thenReturn("test#1234");
+        when(user.getDiscordUsername()).thenReturn("testuser");
         when(user.getCreatedAt()).thenReturn(createdAt);
         when(user.getUpdatedAt()).thenReturn(updatedAt);
 
@@ -408,7 +410,7 @@ class UserServiceTest {
         assertEquals(playTimeEnd, response.playTimeEnd());
         assertEquals("よろしくお願いします", response.message());
         assertEquals("testxid", response.xId());
-        assertEquals("test#1234", response.discordId());
+        assertEquals("testuser", response.discordUsername());
         assertEquals(createdAt, response.createdAt());
         assertEquals(updatedAt, response.updatedAt());
 
@@ -504,8 +506,7 @@ class UserServiceTest {
     private static UserUpdateRequest allUndefined() {
         return new UserUpdateRequest(
                 JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined());
     }
 
     @Test
@@ -536,7 +537,8 @@ class UserServiceTest {
         verify(user, never()).updatePlayTimeEnd(any());
         verify(user, never()).updateMessage(any());
         verify(user, never()).updateXId(any());
-        verify(user, never()).updateDiscordId(any());
+        verify(user, never()).linkDiscordAccount(any(), any());
+        verify(user, never()).unlinkDiscordAccount();
         verify(characterRepository, never()).findById(any());
         verify(userRepository, never()).save(any());
     }
@@ -549,8 +551,7 @@ class UserServiceTest {
 
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.of("New Name"), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined());
 
         UserMeResponse response = userService.updateUser(1L, request);
 
@@ -561,7 +562,8 @@ class UserServiceTest {
         verify(user, never()).updatePlayTimeEnd(any());
         verify(user, never()).updateMessage(any());
         verify(user, never()).updateXId(any());
-        verify(user, never()).updateDiscordId(any());
+        verify(user, never()).linkDiscordAccount(any(), any());
+        verify(user, never()).unlinkDiscordAccount();
         verify(characterRepository, never()).findById(any());
     }
 
@@ -573,8 +575,7 @@ class UserServiceTest {
 
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.of(null), JsonNullable.undefined(),
-                JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.of(null));
 
         userService.updateUser(1L, request);
 
@@ -589,8 +590,7 @@ class UserServiceTest {
 
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.of(null),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined());
 
         userService.updateUser(1L, request);
 
@@ -599,21 +599,16 @@ class UserServiceTest {
     }
 
     @Test
-    void updateUser_xIdが明示的nullかつdiscordIdが値ありの場合_それぞれ正しく更新する() {
+    void updateUser_xId及びdiscordIdはrequestに存在せずPATCHでは更新されない() {
 
         User user = mock(User.class);
         when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
 
-        UserUpdateRequest request = new UserUpdateRequest(
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.of(null),
-                JsonNullable.of("new#1234"));
+        userService.updateUser(1L, allUndefined());
 
-        userService.updateUser(1L, request);
-
-        verify(user).updateXId(null);
-        verify(user).updateDiscordId("new#1234");
+        verify(user, never()).updateXId(any());
+        verify(user, never()).linkDiscordAccount(any(), any());
+        verify(user, never()).unlinkDiscordAccount();
     }
 
     @Test
@@ -629,8 +624,7 @@ class UserServiceTest {
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(),
                 JsonNullable.of(List.of(characterRequest)),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
 
         UserMeResponse response = userService.updateUser(1L, request);
 
@@ -658,8 +652,7 @@ class UserServiceTest {
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(),
                 JsonNullable.of(List.of(characterRequest1, characterRequest2)),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
 
         InvalidRequestException exception = assertThrows(
                 InvalidRequestException.class,
@@ -681,8 +674,7 @@ class UserServiceTest {
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(),
                 JsonNullable.of(List.of(characterRequest)),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
 
         InvalidRequestException exception = assertThrows(
                 InvalidRequestException.class,
@@ -711,8 +703,7 @@ class UserServiceTest {
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(),
                 JsonNullable.of(List.of(characterRequest1, characterRequest2, characterRequest3)),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
 
         UserMeResponse response = userService.updateUser(1L, request);
 
@@ -742,8 +733,7 @@ class UserServiceTest {
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(),
                 JsonNullable.of(List.of(characterRequest)),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
 
         InvalidRequestException exception = assertThrows(
                 InvalidRequestException.class,
@@ -764,8 +754,7 @@ class UserServiceTest {
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(),
                 JsonNullable.of(List.of(characterRequest)),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
 
         InvalidRequestException exception = assertThrows(
                 InvalidRequestException.class,
@@ -786,8 +775,7 @@ class UserServiceTest {
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(),
                 JsonNullable.of(List.of(characterRequest)),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
 
         InvalidRequestException exception = assertThrows(
                 InvalidRequestException.class,
@@ -808,8 +796,7 @@ class UserServiceTest {
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(),
                 JsonNullable.of(List.of(characterRequest)),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
 
         InvalidRequestException exception = assertThrows(
                 InvalidRequestException.class,
@@ -830,8 +817,7 @@ class UserServiceTest {
         UserUpdateRequest request = new UserUpdateRequest(
                 JsonNullable.undefined(),
                 JsonNullable.of(List.of(characterRequest)),
-                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined(),
-                JsonNullable.undefined(), JsonNullable.undefined());
+                JsonNullable.undefined(), JsonNullable.undefined(), JsonNullable.undefined());
 
         InvalidRequestException exception = assertThrows(
                 InvalidRequestException.class,
@@ -870,7 +856,7 @@ class UserServiceTest {
         when(user.getMessage()).thenReturn(null);
         when(user.getEmail()).thenReturn("user@example.com");
         when(user.getXId()).thenReturn(null);
-        when(user.getDiscordId()).thenReturn(null);
+        when(user.getDiscordUsername()).thenReturn(null);
         when(user.getCreatedAt()).thenReturn(createdAt);
         when(user.getUpdatedAt()).thenReturn(updatedAt);
 
@@ -895,7 +881,7 @@ class UserServiceTest {
         assertEquals(null, response.playTimeEnd());
         assertEquals(null, response.message());
         assertEquals(null, response.xId());
-        assertEquals(null, response.discordId());
+        assertEquals(null, response.discordUsername());
 
         assertEquals(1L, response.id());
         assertEquals("Test User", response.name());
@@ -928,5 +914,112 @@ class UserServiceTest {
         assertTrue(componentNames.contains("email"));
         assertTrue(!componentNames.contains("passwordHash"));
         assertTrue(!componentNames.contains("deleteFlag"));
+    }
+
+    // ==== linkDiscordAccount ====
+
+    @Test
+    void linkDiscordAccount_未連携の場合_現在Userへ新規に連携する() {
+        User currentUser = mock(User.class);
+        when(userRepository.findByDiscordIdAndDeleteFlagFalse("discord-1"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(1L))
+                .thenReturn(Optional.of(currentUser));
+
+        userService.linkDiscordAccount(1L, "discord-1", "testuser");
+
+        verify(currentUser).linkDiscordAccount("discord-1", "testuser");
+        verify(currentUser, never()).unlinkDiscordAccount();
+        verify(userRepository, times(1)).findByIdAndDeleteFlagFalseForUpdate(any());
+    }
+
+    @Test
+    void linkDiscordAccount_自分自身に既に連携済みの場合_discordUsernameを更新するだけで解除処理は呼ばれない() {
+        User currentUser = mock(User.class);
+        when(currentUser.getId()).thenReturn(1L);
+        when(userRepository.findByDiscordIdAndDeleteFlagFalse("discord-1"))
+                .thenReturn(Optional.of(currentUser));
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(1L))
+                .thenReturn(Optional.of(currentUser));
+
+        userService.linkDiscordAccount(1L, "discord-1", "new-username");
+
+        verify(currentUser).linkDiscordAccount("discord-1", "new-username");
+        verify(currentUser, never()).unlinkDiscordAccount();
+        // 対象が1User(自分自身)のみなので、ロック取得も1回だけで良い。
+        verify(userRepository, times(1)).findByIdAndDeleteFlagFalseForUpdate(any());
+    }
+
+    // 正式business rule: 旧User/現Userのロック順序を常にID昇順に固定し、デッドロックを防ぐ。
+    // currentUserId(2)が旧User(1)より大きい場合でも、ID昇順(1→2)でロックされることを確認する。
+    @Test
+    void linkDiscordAccount_別ユーザーに連携済みの場合_旧Userを解除し現在Userへ付け替えID昇順でロックする() {
+        User oldOwner = mock(User.class);
+        when(oldOwner.getId()).thenReturn(1L);
+        when(oldOwner.getDiscordId()).thenReturn("discord-1");
+
+        User currentUser = mock(User.class);
+
+        when(userRepository.findByDiscordIdAndDeleteFlagFalse("discord-1"))
+                .thenReturn(Optional.of(oldOwner));
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(1L))
+                .thenReturn(Optional.of(oldOwner));
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L))
+                .thenReturn(Optional.of(currentUser));
+
+        userService.linkDiscordAccount(2L, "discord-1", "new-username");
+
+        InOrder inOrder = inOrder(userRepository);
+        inOrder.verify(userRepository).findByIdAndDeleteFlagFalseForUpdate(1L);
+        inOrder.verify(userRepository).findByIdAndDeleteFlagFalseForUpdate(2L);
+
+        verify(oldOwner).unlinkDiscordAccount();
+        verify(currentUser).linkDiscordAccount("discord-1", "new-username");
+    }
+
+    @Test
+    void linkDiscordAccount_旧Userが既に別のDiscordIdへ変わっていた場合_解除処理をスキップする() {
+        User oldOwner = mock(User.class);
+        when(oldOwner.getId()).thenReturn(2L);
+        // lock取得後の再確認時点では、別Transactionにより既に別のdiscordIdへ変わっている
+        // (= もはやこのdiscordIdの実際の保持者ではない)ケース。
+        when(oldOwner.getDiscordId()).thenReturn("already-changed");
+
+        User currentUser = mock(User.class);
+
+        when(userRepository.findByDiscordIdAndDeleteFlagFalse("discord-1"))
+                .thenReturn(Optional.of(oldOwner));
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(1L))
+                .thenReturn(Optional.of(currentUser));
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L))
+                .thenReturn(Optional.of(oldOwner));
+
+        userService.linkDiscordAccount(1L, "discord-1", "new-username");
+
+        verify(oldOwner, never()).unlinkDiscordAccount();
+        verify(currentUser).linkDiscordAccount("discord-1", "new-username");
+    }
+
+    // ==== unlinkDiscordAccount ====
+
+    @Test
+    void unlinkDiscordAccount_存在するUserの場合_連携を解除する() {
+        User user = mock(User.class);
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(1L)).thenReturn(Optional.of(user));
+
+        userService.unlinkDiscordAccount(1L);
+
+        verify(user).unlinkDiscordAccount();
+    }
+
+    @Test
+    void unlinkDiscordAccount_存在しないUserの場合_UserNotFoundExceptionを投げる() {
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(999L)).thenReturn(Optional.empty());
+
+        UserNotFoundException exception = assertThrows(
+                UserNotFoundException.class,
+                () -> userService.unlinkDiscordAccount(999L));
+
+        assertEquals("User not found. id=999", exception.getMessage());
     }
 }

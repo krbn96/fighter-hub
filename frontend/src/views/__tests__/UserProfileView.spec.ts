@@ -32,7 +32,7 @@ const samplePublicUser: UserPublic = {
   playTimeEnd: '23:00:00',
   message: 'よろしく',
   xId: 'somexid',
-  discordId: 'some#1234',
+  discordUsername: 'some#1234',
   createdAt: '2026-09-01T00:00:00',
   updatedAt: '2026-09-01T00:00:00',
 }
@@ -60,7 +60,7 @@ describe('UserProfileView', () => {
     expect(text).toContain('MR 1650')
   })
 
-  it('emailやMy Teams/My Applications導線、xId/discordIdを表示しない', async () => {
+  it('emailやMy Teams/My Applications導線、xId/discordUsernameを表示しない', async () => {
     vi.mocked(fetchUserById).mockResolvedValue(samplePublicUser)
     vi.mocked(fetchCharacters).mockResolvedValue(sampleCharacters)
 

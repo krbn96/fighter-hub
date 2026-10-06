@@ -11,8 +11,9 @@ export async function fetchUserById(userId: number): Promise<UserPublic> {
 }
 
 // PATCH /api/users/me
-// requestのキーを省略した項目(xId/discordId/charactersが未取得の場合のcharacters)は
+// requestのキーを省略した項目(charactersが未取得の場合のcharacters)は
 // JSON.stringifyでそのままキー自体が省略され、JsonNullableのundefined(更新しない)として扱われる。
+// xId/discordUsernameはこのAPIでは編集できない(discordUsernameはDiscord OAuthフロー経由でのみ更新される)。
 export async function updateMe(request: UserUpdateRequest): Promise<UserMe> {
   const response = await apiClient.patch<UserMe>('/users/me', request)
   return response.data

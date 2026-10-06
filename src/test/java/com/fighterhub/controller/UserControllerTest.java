@@ -5,10 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -272,7 +274,7 @@ class UserControllerTest {
                 LocalTime.of(23, 30),
                 "よろしくお願いします",
                 "testxid",
-                "test#1234",
+                "testuser",
                 LocalDateTime.of(2026, 1, 1, 0, 0),
                 LocalDateTime.of(2026, 1, 2, 0, 0)
         );
@@ -290,7 +292,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.playTimeEnd").exists())
                 .andExpect(jsonPath("$.message").value("よろしくお願いします"))
                 .andExpect(jsonPath("$.xId").value("testxid"))
-                .andExpect(jsonPath("$.discordId").value("test#1234"))
+                .andExpect(jsonPath("$.discordUsername").value("testuser"))
+                .andExpect(jsonPath("$.discordId").doesNotExist())
                 .andExpect(jsonPath("$.createdAt").exists())
                 .andExpect(jsonPath("$.updatedAt").exists())
                 .andExpect(jsonPath("$.email").doesNotExist())
@@ -337,7 +340,7 @@ class UserControllerTest {
                 "よろしくお願いします",
                 "test@example.com",
                 "testxid",
-                "test#1234",
+                "testuser",
                 LocalDateTime.of(2026, 1, 1, 0, 0),
                 LocalDateTime.of(2026, 1, 2, 0, 0)
         );
@@ -352,7 +355,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.characters[0].characterId").value(1))
                 .andExpect(jsonPath("$.email").value("test@example.com"))
                 .andExpect(jsonPath("$.xId").value("testxid"))
-                .andExpect(jsonPath("$.discordId").value("test#1234"));
+                .andExpect(jsonPath("$.discordUsername").value("testuser"))
+                .andExpect(jsonPath("$.discordId").doesNotExist());
 
         verify(userService, times(1)).findMe(1L);
     }
@@ -497,6 +501,55 @@ class UserControllerTest {
                 .andExpect(status().isUnauthorized());
 
         verify(userService, never()).updateUser(any(), any());
+    }
+
+    @Test
+    void deleteDiscordLink_JWTありの場合_204を返しJWTのsubjectのuserIdでunlinkDiscordAccountが呼ばれる() throws Exception {
+
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+
+        mockMvc.perform(delete("/api/users/me/discord")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isNoContent());
+
+        verify(userService, times(1)).unlinkDiscordAccount(1L);
+    }
+
+    @Test
+    void deleteDiscordLink_未連携状態で呼んでも204を返す() throws Exception {
+
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+
+        // unlinkDiscordAccountは未連携でも例外を投げず正常終了する(Service側で冪等に実装済み)。
+        mockMvc.perform(delete("/api/users/me/discord")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void deleteDiscordLink_JWTのsubjectに対応するユーザーが存在しない場合_404を返す() throws Exception {
+
+        Jwt jwt = validJwt("999");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+
+        doThrow(new UserNotFoundException(999L))
+                .when(userService).unlinkDiscordAccount(999L);
+
+        mockMvc.perform(delete("/api/users/me/discord")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("User not found. id=999"));
+    }
+
+    @Test
+    void deleteDiscordLink_未認証の場合_401を返す() throws Exception {
+
+        mockMvc.perform(delete("/api/users/me/discord"))
+                .andExpect(status().isUnauthorized());
+
+        verify(userService, never()).unlinkDiscordAccount(any());
     }
 
     // JwtDecoderをモック化しているため、署名検証・exp検証自体はSecurityConfigTestで確認する。

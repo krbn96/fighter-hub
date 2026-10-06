@@ -44,6 +44,10 @@ public class SecurityConfig {
                 // 数値IDのみに一致させ、将来のPOST/PATCH/DELETEはpermitAllにならないようにする
                 .requestMatchers(HttpMethod.GET, "/api/tournaments/{id:[0-9]+}").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/tournaments/{tournamentId:[0-9]+}/teams").permitAll()
+                // Discordから未認証で呼ばれるcallbackのみpermitAll。
+                // POST /api/oauth/discord/authorize・DELETE /api/users/me/discordは
+                // anyRequest().authenticated()の対象のまま(JWT必須)で変更しない。
+                .requestMatchers(HttpMethod.GET, "/api/oauth/discord/callback").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2ResourceServer(oauth2 -> oauth2

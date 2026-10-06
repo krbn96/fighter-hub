@@ -86,9 +86,7 @@ class UserServicePersistenceTest {
                 JsonNullable.undefined(),
                 JsonNullable.undefined(),
                 JsonNullable.undefined(),
-                JsonNullable.of("FIGHTER HUBを開発中です"),
-                JsonNullable.undefined(),
-                JsonNullable.undefined()
+                JsonNullable.of("FIGHTER HUBを開発中です")
         );
 
         UserMeResponse patchResponse = userService.updateUser(createdUserId, updateRequest);

@@ -12,7 +12,7 @@ public record UserPublicResponse(
     LocalTime playTimeEnd,
     String message,
     String xId,
-    String discordId,
+    String discordUsername,
     LocalDateTime createdAt,
     LocalDateTime updatedAt
 ) {

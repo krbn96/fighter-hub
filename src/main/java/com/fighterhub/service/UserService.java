@@ -1,9 +1,14 @@
 package com.fighterhub.service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -115,13 +120,8 @@ public class UserService {
             user.updateMessage(request.message().get());
         }
 
-        if (!request.xId().isUndefined()) {
-            user.updateXId(request.xId().get());
-        }
-
-        if (!request.discordId().isUndefined()) {
-            user.updateDiscordId(request.discordId().get());
-        }
+        // xId/discordIdはPATCH /api/users/meからの直接編集を提供しない(OAuth連携専用の
+        // 更新経路(linkDiscordAccount/unlinkDiscordAccount)のみで更新される)。
 
         // dirty checkingによるUPDATEはtransactionコミット時までflushされないため、
         // flushしないまま生成すると@UpdateTimestampが未反映のupdatedAtをレスポンスに含めてしまう。
@@ -215,7 +215,7 @@ public class UserService {
                 user.getPlayTimeEnd(),
                 user.getMessage(),
                 user.getXId(),
-                user.getDiscordId(),
+                user.getDiscordUsername(),
                 user.getCreatedAt(),
                 user.getUpdatedAt()
         );
@@ -250,9 +250,56 @@ public class UserService {
                 user.getMessage(),
                 user.getEmail(),
                 user.getXId(),
-                user.getDiscordId(),
+                user.getDiscordUsername(),
                 user.getCreatedAt(),
                 user.getUpdatedAt()
         );
+    }
+
+    // Discordアカウント連携(新規/自分自身への再連携/他Userからの付け替え)。
+    //
+    // lock取得順序: 対象Discord IDを現在連携しているUser(いれば)と現在Userの両方を、
+    // ID昇順で固定した順序でPESSIMISTIC_WRITEロックする(findByDiscordIdAndDeleteFlagFalseは
+    // ロックを取得しない事前検索であり、実際の更新は必ずこのID昇順ロックの後に行う)。
+    // 複数のDiscordアカウント連携が同時に実行されても、どのTransactionも常に同じ順序で
+    // ロックを取得するため、旧User/現Userのロック順序が不定になる循環待ち(deadlock)は
+    // 構造的に起こり得ない(Tournament/RecruitmentApplicationの既存ロック順序統一と同じ考え方)。
+    @Transactional
+    public void linkDiscordAccount(Long currentUserId, String discordId, String discordUsername) {
+        Optional<User> existingHolder = userRepository.findByDiscordIdAndDeleteFlagFalse(discordId);
+
+        SortedSet<Long> idsToLock = new TreeSet<>();
+        idsToLock.add(currentUserId);
+        existingHolder.ifPresent(holder -> idsToLock.add(holder.getId()));
+
+        Map<Long, User> lockedUsers = new HashMap<>();
+        for (Long id : idsToLock) {
+            User lockedUser = userRepository.findByIdAndDeleteFlagFalseForUpdate(id)
+                    .orElseThrow(() -> new UserNotFoundException(id));
+            lockedUsers.put(id, lockedUser);
+        }
+
+        if (existingHolder.isPresent() && !existingHolder.get().getId().equals(currentUserId)) {
+            User oldOwner = lockedUsers.get(existingHolder.get().getId());
+            // lock取得後に再確認する: この間に別Transactionが既にoldOwnerの連携を
+            // 解除・変更している可能性があるため、実際にまだ同じdiscordIdを保持している
+            // 場合のみ解除する。
+            if (discordId.equals(oldOwner.getDiscordId())) {
+                oldOwner.unlinkDiscordAccount();
+            }
+        }
+
+        User currentUser = lockedUsers.get(currentUserId);
+        currentUser.linkDiscordAccount(discordId, discordUsername);
+    }
+
+    // 未連携状態で呼ばれても成功扱いとする冪等な解除(discordId/discordUsernameを
+    // 同時にクリアする)。
+    @Transactional
+    public void unlinkDiscordAccount(Long userId) {
+        User user = userRepository.findByIdAndDeleteFlagFalseForUpdate(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        user.unlinkDiscordAccount();
     }
 }

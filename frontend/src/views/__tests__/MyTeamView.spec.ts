@@ -23,7 +23,7 @@ function createUserMe(id: number): UserMe {
     message: null,
     email: 'test@example.com',
     xId: null,
-    discordId: null,
+    discordUsername: null,
     createdAt: '2026-09-01T00:00:00',
     updatedAt: '2026-09-01T00:00:00',
   }

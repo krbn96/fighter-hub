@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -201,5 +202,41 @@ public class UserController {
             @Valid @RequestBody UserUpdateRequest request) {
         Long userId = Long.valueOf(jwt.getSubject());
         return userService.updateUser(userId, request);
+    }
+
+    @Operation(
+        summary = "Discord連携解除",
+        description = "認証済みユーザー自身のDiscordアカウント連携を解除する。未連携状態で呼んでも成功扱いとする冪等API。"
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "204",
+            description = "解除成功(未連携状態だった場合も含む)"
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "認証されていない、または無効なJWT"
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "JWTのsubに対応するユーザーが存在しない",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        ),
+        @ApiResponse(
+            responseCode = "500",
+            description = "サーバーエラー",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
+        )
+    })
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @DeleteMapping("/me/discord")
+    public void deleteDiscordLink(@AuthenticationPrincipal Jwt jwt) {
+        Long userId = Long.valueOf(jwt.getSubject());
+        userService.unlinkDiscordAccount(userId);
     }
 }

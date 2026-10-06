@@ -23,11 +23,7 @@ public record UserUpdateRequest(
 
     JsonNullable<LocalTime> playTimeEnd,
 
-    JsonNullable<String> message,
-
-    JsonNullable<String> xId,
-
-    JsonNullable<String> discordId
+    JsonNullable<String> message
 ) {
     public UserUpdateRequest {
         name = normalize(name);
@@ -35,8 +31,6 @@ public record UserUpdateRequest(
         playTimeStart = normalize(playTimeStart);
         playTimeEnd = normalize(playTimeEnd);
         message = normalize(message);
-        xId = normalize(xId);
-        discordId = normalize(discordId);
     }
 
     private static <T> JsonNullable<T> normalize(JsonNullable<T> value) {

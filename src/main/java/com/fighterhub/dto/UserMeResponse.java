@@ -13,7 +13,7 @@ public record UserMeResponse(
     String message,
     String email,
     String xId,
-    String discordId,
+    String discordUsername,
     LocalDateTime createdAt,
     LocalDateTime updatedAt
 ) {
