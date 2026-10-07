@@ -891,7 +891,9 @@ paths:
   /tournaments/{tournamentId}/teams:
     get:
       summary: 大会ごとのチーム一覧取得
-      description: 指定した大会に属する有効なチームの一覧を取得する(delete_flag=falseのTeam/Tournament/ownerのみ)
+      description: |
+        指定した大会に属する有効なチームの一覧を取得する(delete_flag=falseのTeam/Tournament/ownerのみ)。
+        name/characterId/rank/availableはすべて任意で、組み合わせて絞り込める(AND条件)。
       parameters:
         - name: tournamentId
           in: path
@@ -902,6 +904,49 @@ paths:
           description: 大会ID
           example: 1
 
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: チーム名の部分一致検索(大文字小文字を区別しない)。未指定または空白のみの場合は条件なし。
+          example: Ryu
+
+        - name: characterId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: |
+            指定したcharacterIdをcharacter_requirements(募集キャラクター)に含むチームのみ返す。
+            存在しないcharacterIdを指定した場合もエラーにはならず、該当チーム0件として扱う。
+          example: 1
+
+        - name: rank
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ROOKIE, IRON, BRONZE, SILVER, GOLD, PLATINUM, DIAMOND, MASTER]
+          description: |
+            指定したランクのプレイヤーが応募条件を満たせるチームのみ返す
+            (rank_requirementとの完全一致検索ではない。例: DIAMOND指定ならIRON/GOLD/PLATINUM/DIAMOND
+            等の要求ランクのチームは対象、MASTER要求のチームは対象外。rank_requirement未指定の
+            チームは常に対象)。
+          example: DIAMOND
+
+        - name: available
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: |
+            trueの場合、定員に空きがあるチームのみ返す。false、または未指定の場合は空き状況で
+            絞り込まない。空き状況は「TeamMemberに紐づくUserのdelete_flag=false」で数えた
+            現在有効なメンバー数がTournament.teamSize未満かどうかで判定する。
+          example: true
+
       responses:
         '200':
           description: 取得成功
@@ -911,6 +956,13 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/TeamResponse'
+
+        '400':
+          description: rankが不正な値、またはcharacterId/availableがそれぞれの型として解釈できない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
         '404':
           description: 指定した大会が存在しない、またはdelete_flag=true

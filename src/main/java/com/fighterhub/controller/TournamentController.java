@@ -113,11 +113,19 @@ public class TournamentController {
     @Operation(
         summary = "大会ごとのチーム一覧取得",
         description = "指定した大会に属する有効なチームの一覧を取得します。"
+            + "name/characterId/rank/availableはすべて任意で、組み合わせて絞り込めます(AND条件)。"
     )
     @ApiResponses({
         @ApiResponse(
             responseCode = "200",
             description = "取得成功"
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "rankが不正な値、またはcharacterId/availableがそれぞれの型として解釈できない",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
         ),
         @ApiResponse(
             responseCode = "404",
@@ -135,8 +143,13 @@ public class TournamentController {
         )
     })
     @GetMapping("/{tournamentId}/teams")
-    public List<TeamResponse> findTeamsByTournament(@PathVariable Long tournamentId) {
-        return teamService.findTeamsByTournament(tournamentId);
+    public List<TeamResponse> findTeamsByTournament(
+            @PathVariable Long tournamentId,
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) Long characterId,
+            @RequestParam(required = false) String rank,
+            @RequestParam(required = false) Boolean available) {
+        return teamService.findTeamsByTournament(tournamentId, name, characterId, rank, available);
     }
 
     @Operation(

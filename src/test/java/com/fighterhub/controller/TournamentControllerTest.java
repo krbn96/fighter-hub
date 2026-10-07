@@ -36,6 +36,7 @@ import com.fighterhub.dto.TeamResponse;
 import com.fighterhub.dto.TournamentCreateRequest;
 import com.fighterhub.dto.TournamentResponse;
 import com.fighterhub.dto.TournamentUpdateRequest;
+import com.fighterhub.exception.InvalidRequestException;
 import com.fighterhub.exception.NotAdminException;
 import com.fighterhub.exception.TournamentNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
@@ -180,7 +181,8 @@ class TournamentControllerTest {
 
     @Test
     void findTeamsByTournament_認証なしで200を返しTeam一覧を取得できる() throws Exception {
-        when(teamService.findTeamsByTournament(1L)).thenReturn(List.of(sampleTeamResponse(100L, 1L)));
+        when(teamService.findTeamsByTournament(1L, null, null, null, null))
+                .thenReturn(List.of(sampleTeamResponse(100L, 1L)));
 
         mockMvc.perform(get("/api/tournaments/1/teams"))
                 .andExpect(status().isOk())
@@ -191,7 +193,7 @@ class TournamentControllerTest {
 
     @Test
     void findTeamsByTournament_Teamが0件の場合_200を返し空配列を返す() throws Exception {
-        when(teamService.findTeamsByTournament(1L)).thenReturn(List.of());
+        when(teamService.findTeamsByTournament(1L, null, null, null, null)).thenReturn(List.of());
 
         mockMvc.perform(get("/api/tournaments/1/teams"))
                 .andExpect(status().isOk())
@@ -200,8 +202,51 @@ class TournamentControllerTest {
     }
 
     @Test
+    void findTeamsByTournament_nameCharacterIdRankAvailableの各クエリパラメータをServiceへそのまま渡す() throws Exception {
+        when(teamService.findTeamsByTournament(1L, "ryu", 2L, "DIAMOND", true))
+                .thenReturn(List.of(sampleTeamResponse(100L, 1L)));
+
+        mockMvc.perform(get("/api/tournaments/1/teams")
+                        .param("name", "ryu")
+                        .param("characterId", "2")
+                        .param("rank", "DIAMOND")
+                        .param("available", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(100));
+
+        verify(teamService, times(1)).findTeamsByTournament(1L, "ryu", 2L, "DIAMOND", true);
+    }
+
+    @Test
+    void findTeamsByTournament_availableがBooleanとして解釈できない場合_400を返しServiceは呼ばれない() throws Exception {
+        mockMvc.perform(get("/api/tournaments/1/teams").param("available", "invalid-value"))
+                .andExpect(status().isBadRequest());
+
+        verify(teamService, never()).findTeamsByTournament(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void findTeamsByTournament_characterIdがLongとして解釈できない場合_400を返しServiceは呼ばれない() throws Exception {
+        mockMvc.perform(get("/api/tournaments/1/teams").param("characterId", "not-a-number"))
+                .andExpect(status().isBadRequest());
+
+        verify(teamService, never()).findTeamsByTournament(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void findTeamsByTournament_TeamServiceがInvalidRequestExceptionを投げた場合_400を返す() throws Exception {
+        when(teamService.findTeamsByTournament(1L, null, null, "invalid-rank", null))
+                .thenThrow(new InvalidRequestException("Invalid rank specified: invalid-rank"));
+
+        mockMvc.perform(get("/api/tournaments/1/teams").param("rank", "invalid-rank"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid rank specified: invalid-rank"));
+    }
+
+    @Test
     void findTeamsByTournament_TeamServiceがTournamentNotFoundExceptionを投げた場合_404を返す() throws Exception {
-        when(teamService.findTeamsByTournament(999L)).thenThrow(new TournamentNotFoundException(999L));
+        when(teamService.findTeamsByTournament(999L, null, null, null, null))
+                .thenThrow(new TournamentNotFoundException(999L));
 
         mockMvc.perform(get("/api/tournaments/999/teams"))
                 .andExpect(status().isNotFound())

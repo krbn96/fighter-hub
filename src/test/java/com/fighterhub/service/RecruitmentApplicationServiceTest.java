@@ -559,7 +559,7 @@ class RecruitmentApplicationServiceTest {
                 .thenReturn(List.of(application));
         when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L)).thenReturn(Optional.of(lockedApplicant));
         when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
-        when(teamMemberRepository.countByTeam_Id(100L)).thenReturn(2L);
+        when(teamMemberRepository.countByTeam_IdAndUser_DeleteFlagFalse(100L)).thenReturn(2L);
 
         RecruitmentApplicationResponse response = recruitmentApplicationService.approveApplication(1L, 100L, 500L);
 
@@ -610,7 +610,7 @@ class RecruitmentApplicationServiceTest {
                 .thenReturn(List.of(application));
         when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L)).thenReturn(Optional.of(lockedApplicant));
         when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
-        when(teamMemberRepository.countByTeam_Id(100L)).thenReturn(2L);
+        when(teamMemberRepository.countByTeam_IdAndUser_DeleteFlagFalse(100L)).thenReturn(2L);
 
         RecruitmentApplicationResponse response = recruitmentApplicationService.approveApplication(1L, 100L, 500L);
 
@@ -647,7 +647,7 @@ class RecruitmentApplicationServiceTest {
                 .thenReturn(List.of(targetApplication, otherPendingApplication));
         when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L)).thenReturn(Optional.of(lockedApplicant));
         when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
-        when(teamMemberRepository.countByTeam_Id(100L)).thenReturn(2L);
+        when(teamMemberRepository.countByTeam_IdAndUser_DeleteFlagFalse(100L)).thenReturn(2L);
 
         RecruitmentApplicationResponse response = recruitmentApplicationService.approveApplication(1L, 100L, 500L);
 
@@ -813,7 +813,7 @@ class RecruitmentApplicationServiceTest {
 
         // User lockはこの時点で既に取得済みであること(チェック順が崩れていないこと)を確認する。
         verify(userRepository, times(1)).findByIdAndDeleteFlagFalseForUpdate(2L);
-        verify(teamMemberRepository, never()).countByTeam_Id(any());
+        verify(teamMemberRepository, never()).countByTeam_IdAndUser_DeleteFlagFalse(any());
         verify(teamMemberRepository, never()).save(any());
         assertEquals(RecruitmentApplicationStatus.PENDING, application.getStatus());
     }
@@ -833,7 +833,7 @@ class RecruitmentApplicationServiceTest {
                 .thenReturn(List.of(application));
         when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L)).thenReturn(Optional.of(applicant));
         when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
-        when(teamMemberRepository.countByTeam_Id(100L)).thenReturn(3L);
+        when(teamMemberRepository.countByTeam_IdAndUser_DeleteFlagFalse(100L)).thenReturn(3L);
 
         assertThrows(
                 TeamFullException.class,
@@ -841,6 +841,38 @@ class RecruitmentApplicationServiceTest {
 
         verify(teamMemberRepository, never()).save(any());
         assertEquals(RecruitmentApplicationStatus.PENDING, application.getStatus());
+    }
+
+    // 「現在有効なメンバー数」の定義統一の回帰確認: 定員判定にはcountByTeam_Id(全件、
+    // deleteFlag=trueのUserも含む)ではなくcountByTeam_IdAndUser_DeleteFlagFalse(有効のみ)を
+    // 使用すること自体を確認する(レスポンスの検証だけでは呼び出しメソッドの違いを検出できないため)。
+    @Test
+    void approveApplication_定員判定にはdeleteFlagを考慮したcountメソッドが使用されcountByTeam_Idは使用されない() {
+        User owner = mockOwner();
+        User applicant = mockApplicant();
+        Tournament tournament = mockTournament();
+        when(tournament.getTeamSize()).thenReturn(3);
+        Team team = mockTeam(tournament, owner);
+        RecruitmentApplication application = mockPersistedApplication(team, applicant, null, 500L);
+
+        when(teamRepository.findActiveTeamByIdForUpdate(100L)).thenReturn(Optional.of(team));
+        when(recruitmentApplicationRepository.findTargetAndPendingForUpdateOrderById(
+                500L, 10L, RecruitmentApplicationStatus.PENDING))
+                .thenReturn(List.of(application));
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L)).thenReturn(Optional.of(applicant));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(2L, 10L)).thenReturn(false);
+        // 有効人数カウント(countByTeam_IdAndUser_DeleteFlagFalse)が2(定員3未満、空きあり)を
+        // 返せばapproveは成功する。countByTeam_Id(全件カウント)は一切スタブしておらず、
+        // production codeがこちらを呼び出せばUnnecessaryStubbingException等にはならないが
+        // 戻り値はMockitoのデフォルト(0)になるため、below never()での未使用確認と合わせて
+        // 「実際に使用されるのはcountByTeam_IdAndUser_DeleteFlagFalseのみ」であることを確認する。
+        when(teamMemberRepository.countByTeam_IdAndUser_DeleteFlagFalse(100L)).thenReturn(2L);
+
+        RecruitmentApplicationResponse response = recruitmentApplicationService.approveApplication(1L, 100L, 500L);
+
+        assertEquals(RecruitmentApplicationStatus.APPROVED, response.status());
+        verify(teamMemberRepository, times(1)).save(any(TeamMember.class));
+        verify(teamMemberRepository, never()).countByTeam_Id(any());
     }
 
     // ==================== rejectApplication ====================
@@ -869,7 +901,7 @@ class RecruitmentApplicationServiceTest {
         verify(userRepository, never()).findByIdAndDeleteFlagFalseForUpdate(any());
         verify(teamMemberRepository, never()).save(any());
         verify(teamMemberRepository, never()).existsByUser_IdAndTeam_Tournament_Id(any(), any());
-        verify(teamMemberRepository, never()).countByTeam_Id(any());
+        verify(teamMemberRepository, never()).countByTeam_IdAndUser_DeleteFlagFalse(any());
     }
 
     // 正式business rule: 締切前に受け付けたPENDING Applicationは、募集締切後でも拒否可能

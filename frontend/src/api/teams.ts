@@ -10,10 +10,29 @@ import type {
 // Axios呼び出しのみを担当する(api/tournaments.ts等と同じ形式)。
 // localStorage/Bearer Tokenの扱いはapi/client.tsのrequest interceptorに任せる。
 
+export interface FetchTeamsByTournamentParams {
+  name?: string
+  characterId?: number
+  rank?: string
+  available?: boolean
+}
+
 // GET /api/tournaments/{tournamentId}/teams
 // エンドポイントはTournamentController配下だが、戻り値がTeamのためこちらに置く。
-export async function fetchTeamsByTournament(tournamentId: string): Promise<Team[]> {
-  const response = await apiClient.get<Team[]>(`/tournaments/${tournamentId}/teams`)
+// nameは未指定または空白のみの場合はqueryへ含めない(api/tournaments.tsのfetchTournamentsと同じ方針)。
+export async function fetchTeamsByTournament(
+  tournamentId: string,
+  params: FetchTeamsByTournamentParams = {},
+): Promise<Team[]> {
+  const trimmedName = params.name?.trim()
+  const response = await apiClient.get<Team[]>(`/tournaments/${tournamentId}/teams`, {
+    params: {
+      name: trimmedName ? trimmedName : undefined,
+      characterId: params.characterId,
+      rank: params.rank,
+      available: params.available,
+    },
+  })
   return response.data
 }
 

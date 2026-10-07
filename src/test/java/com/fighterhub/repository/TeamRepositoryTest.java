@@ -186,6 +186,43 @@ class TeamRepositoryTest {
     }
 
     @Test
+    void findActiveTeamsByTournamentIdAndNameContainingIgnoreCase_大文字小文字を区別せず部分一致し別Tournamentは含まない() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Tournament otherTournament = createTournament();
+        String uniqueSuffix = UUID.randomUUID().toString();
+        Team matchingTeam = createTeamWithName(tournament, owner, "Team Ryu " + uniqueSuffix);
+        Team unrelatedTeam = createTeamWithName(tournament, owner, "Team Ken " + uniqueSuffix);
+        Team otherTournamentTeam = createTeamWithName(otherTournament, owner, "Team Ryu " + uniqueSuffix);
+
+        List<Long> foundIds = teamRepository
+                .findActiveTeamsByTournamentIdAndNameContainingIgnoreCase(tournament.getId(), "team ryu")
+                .stream().map(Team::getId).toList();
+
+        assertTrue(foundIds.contains(matchingTeam.getId()));
+        assertFalse(foundIds.contains(unrelatedTeam.getId()));
+        assertFalse(foundIds.contains(otherTournamentTeam.getId()));
+    }
+
+    @Test
+    void findActiveTeamsByTournamentIdAndNameContainingIgnoreCase_TeamdeleteFlagtrueは除外する() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        String uniqueSuffix = UUID.randomUUID().toString();
+        Team team = createTeamWithName(tournament, owner, "Team Ryu " + uniqueSuffix);
+
+        softDeleteTeam(team.getId());
+
+        List<Long> foundIds = teamRepository
+                .findActiveTeamsByTournamentIdAndNameContainingIgnoreCase(tournament.getId(), uniqueSuffix)
+                .stream().map(Team::getId).toList();
+
+        assertFalse(foundIds.contains(team.getId()));
+    }
+
+    @Test
     void findActiveTeamById_有効なTeamはTournament名とowner名を含めて取得できる() {
         Long characterId = anyExistingCharacterId();
         User owner = createUser(characterId);
@@ -268,8 +305,11 @@ class TeamRepositoryTest {
     }
 
     private Team createTeam(Tournament tournament, User owner) {
-        Team team = teamRepository.save(Team.create(
-                tournament, owner, "Test Team " + UUID.randomUUID(), null, null, null));
+        return createTeamWithName(tournament, owner, "Test Team " + UUID.randomUUID());
+    }
+
+    private Team createTeamWithName(Tournament tournament, User owner, String name) {
+        Team team = teamRepository.save(Team.create(tournament, owner, name, null, null, null));
         createdTeamIds.add(team.getId());
 
         return team;

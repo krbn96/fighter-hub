@@ -22,6 +22,7 @@ import com.fighterhub.dto.UserMeResponse;
 import com.fighterhub.dto.UserPublicResponse;
 import com.fighterhub.dto.UserUpdateRequest;
 import com.fighterhub.entity.Character;
+import com.fighterhub.entity.Rank;
 import com.fighterhub.entity.User;
 import com.fighterhub.exception.EmailAlreadyExistsException;
 import com.fighterhub.exception.InvalidRequestException;
@@ -31,11 +32,6 @@ import com.fighterhub.repository.UserRepository;
 
 @Service
 public class UserService {
-
-    // frontend/src/constants/ranks.tsのRANK_OPTIONSと同じ8値(正式business rule)。
-    // rankは自由文字列として保存されているため、ここでbackend側の許容値として明示的に検証する。
-    private static final Set<String> ALLOWED_RANKS = Set.of(
-            "ROOKIE", "IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND", "MASTER");
 
     private static final String MASTER_RANK = "MASTER";
 
@@ -165,12 +161,12 @@ public class UserService {
     }
 
     // 正式business rule(frontendのRANK_OPTIONS/MASTERのみMR入力可能という仕様をbackendでも強制する):
-    // - rankはALLOWED_RANKSのいずれかであること(null/blankは@NotBlankで別途拒否される)
+    // - rankはRank enum(8値)のいずれかであること(null/blankは@NotBlankで別途拒否される)
     // - rankがMASTER以外の場合、mrはnull以外を指定できない
     // - rankがMASTERの場合、mrはnullを許可し、null以外なら0以上であること
     // - mrの上限はInteger型の範囲に委ね、独自の上限チェックは追加しない
     private void validateRankAndMr(String rank, Integer mr) {
-        if (rank == null || !ALLOWED_RANKS.contains(rank)) {
+        if (!Rank.isValid(rank)) {
             throw new InvalidRequestException("Invalid rank specified: " + rank);
         }
 

@@ -179,7 +179,10 @@ public class RecruitmentApplicationService {
             throw new DuplicateTournamentMembershipException(lockedUser.getId(), tournamentId);
         }
 
-        long currentMemberCount = teamMemberRepository.countByTeam_Id(teamId);
+        // 「現在有効なメンバー数」はdelete_flag=trueのUserを含めない(公開メンバー表示・
+        // チーム検索のavailable判定と同じ定義)。例: TeamMemberが3件存在しても1人がdelete_flag=true
+        // なら有効人数は2。
+        long currentMemberCount = teamMemberRepository.countByTeam_IdAndUser_DeleteFlagFalse(teamId);
         if (currentMemberCount >= team.getTournament().getTeamSize()) {
             throw new TeamFullException(teamId);
         }

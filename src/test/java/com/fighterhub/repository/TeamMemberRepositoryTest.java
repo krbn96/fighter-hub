@@ -10,8 +10,10 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -120,6 +122,70 @@ class TeamMemberRepositoryTest {
         Team team = createTeam(tournament, owner);
 
         assertEquals(0L, teamMemberRepository.countByTeam_Id(team.getId()));
+    }
+
+    // 「現在有効なメンバー数」の定義統一(定員判定・公開メンバー表示・available検索で同じ定義を使う)の
+    // 確認。TeamMemberが3件存在しても1人がdeleteFlag=trueなら有効人数は2になる。
+    // countByTeam_Id(全件カウント)との違いも併せて確認する。
+    @Test
+    void countByTeam_IdAndUser_DeleteFlagFalse_deleteFlagtrueのUserは有効人数に含めない() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        User activeMember = createUser(characterId);
+        User deletedMember = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+        createTeamMember(team, owner);
+        createTeamMember(team, activeMember);
+        createTeamMember(team, deletedMember);
+
+        jdbcTemplate.update("UPDATE t_users SET delete_flag = true WHERE id = ?", deletedMember.getId());
+
+        assertEquals(3L, teamMemberRepository.countByTeam_Id(team.getId()));
+        assertEquals(2L, teamMemberRepository.countByTeam_IdAndUser_DeleteFlagFalse(team.getId()));
+    }
+
+    @Test
+    void countByTeam_IdAndUser_DeleteFlagFalse_メンバーが0人の場合は0を返す() {
+        Long characterId = anyExistingCharacterId();
+        User owner = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team team = createTeam(tournament, owner);
+
+        assertEquals(0L, teamMemberRepository.countByTeam_IdAndUser_DeleteFlagFalse(team.getId()));
+    }
+
+    // チーム検索のavailable判定用(N+1回避)。複数Teamの有効メンバー数を1回のクエリで
+    // まとめて取得でき、deleteFlag=trueのUserは含めず、有効なTeamMemberが0人のTeamは
+    // GROUP BYのため結果に含まれないことを確認する(呼び出し側で0人として扱う前提)。
+    @Test
+    void countActiveMembersByTeamIds_複数TeamをまとめてdeleteFlagを考慮して集計し0人のTeamは結果に含まれない() {
+        Long characterId = anyExistingCharacterId();
+        User owner1 = createUser(characterId);
+        User owner2 = createUser(characterId);
+        User owner3 = createUser(characterId);
+        User activeMember = createUser(characterId);
+        User deletedMember = createUser(characterId);
+        Tournament tournament = createTournament();
+        Team teamWithTwoActiveMembers = createTeam(tournament, owner1);
+        Team teamWithOneDeletedMember = createTeam(tournament, owner2);
+        Team teamWithNoMembers = createTeam(tournament, owner3);
+        createTeamMember(teamWithTwoActiveMembers, owner1);
+        createTeamMember(teamWithTwoActiveMembers, activeMember);
+        createTeamMember(teamWithOneDeletedMember, deletedMember);
+
+        jdbcTemplate.update("UPDATE t_users SET delete_flag = true WHERE id = ?", deletedMember.getId());
+
+        List<TeamActiveMemberCount> results = teamMemberRepository.countActiveMembersByTeamIds(List.of(
+                teamWithTwoActiveMembers.getId(), teamWithOneDeletedMember.getId(), teamWithNoMembers.getId()));
+
+        Map<Long, Long> countByTeamId = results.stream()
+                .collect(Collectors.toMap(TeamActiveMemberCount::getTeamId, TeamActiveMemberCount::getActiveMemberCount));
+
+        assertEquals(2L, countByTeamId.get(teamWithTwoActiveMembers.getId()));
+        // deleteFlag=trueのUserしかいないTeamは有効メンバー0人のため、GROUP BYの結果に現れない。
+        assertFalse(countByTeamId.containsKey(teamWithOneDeletedMember.getId()));
+        assertFalse(countByTeamId.containsKey(teamWithNoMembers.getId()));
     }
 
     @Test

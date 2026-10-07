@@ -47,6 +47,7 @@ import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.exception.TournamentNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
 import com.fighterhub.repository.CharacterRepository;
+import com.fighterhub.repository.TeamActiveMemberCount;
 import com.fighterhub.repository.TeamMemberRepository;
 import com.fighterhub.repository.TeamRepository;
 import com.fighterhub.repository.TournamentRepository;
@@ -94,6 +95,16 @@ class TeamServiceTest {
                 "Team Ryu",
                 "MASTER",
                 characterRequirements,
+                "誰でも歓迎です"
+        );
+    }
+
+    private static TeamCreateRequest requestWithRankRequirement(String rankRequirement) {
+        return new TeamCreateRequest(
+                10L,
+                "Team Ryu",
+                rankRequirement,
+                null,
                 "誰でも歓迎です"
         );
     }
@@ -177,6 +188,60 @@ class TeamServiceTest {
         verify(teamMemberRepository, times(1)).save(teamMemberCaptor.capture());
         assertEquals(savedTeam, teamMemberCaptor.getValue().getTeam());
         assertEquals(owner, teamMemberCaptor.getValue().getUser());
+    }
+
+    // rankRequirementはnull(指定なし)を許可する。ランク定義はRank enumを再利用する。
+    @Test
+    void createTeam_rankRequirementがnullの場合_Teamを作成できる() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(owner));
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(1L, 10L)).thenReturn(false);
+
+        Team savedTeam = mockSavedTeam(tournament, owner);
+        when(teamRepository.save(any(Team.class))).thenReturn(savedTeam);
+
+        TeamCreateResponse response = teamService.createTeam(1L, requestWithRankRequirement(null));
+
+        assertNotNull(response);
+        verify(teamMemberRepository, times(1)).save(any(TeamMember.class));
+    }
+
+    // rankRequirementがRank enum(8値)のいずれかであれば作成できる(境界: 最低値と最高値)。
+    @Test
+    void createTeam_rankRequirementがRankenumの値の場合_Teamを作成できる() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(owner));
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(1L, 10L)).thenReturn(false);
+
+        Team savedTeam = mockSavedTeam(tournament, owner);
+        when(teamRepository.save(any(Team.class))).thenReturn(savedTeam);
+
+        assertNotNull(teamService.createTeam(1L, requestWithRankRequirement("ROOKIE")));
+        assertNotNull(teamService.createTeam(1L, requestWithRankRequirement("MASTER")));
+    }
+
+    @Test
+    void createTeam_rankRequirementが不正な値の場合_InvalidRequestExceptionを投げTeamは作成されない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(owner));
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamMemberRepository.existsByUser_IdAndTeam_Tournament_Id(1L, 10L)).thenReturn(false);
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> teamService.createTeam(1L, requestWithRankRequirement("GRANDMASTER")));
+
+        assertEquals("Invalid rankRequirement specified: GRANDMASTER", exception.getMessage());
+        verify(teamRepository, never()).save(any());
+        verify(teamMemberRepository, never()).save(any());
     }
 
     // 正式business rule: 募集締切(recruitmentDeadline)の境界値を固定Clockで検証する。
@@ -418,11 +483,13 @@ class TeamServiceTest {
         when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
         when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(team));
 
-        List<TeamResponse> responses = teamService.findTeamsByTournament(10L);
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, null, null, null);
 
         assertEquals(1, responses.size());
         assertEquals(100L, responses.get(0).id());
         assertEquals("Test Cup", responses.get(0).tournamentName());
+        verify(teamRepository, never())
+                .findActiveTeamsByTournamentIdAndNameContainingIgnoreCase(any(), any());
     }
 
     @Test
@@ -431,7 +498,7 @@ class TeamServiceTest {
 
         assertThrows(
                 TournamentNotFoundException.class,
-                () -> teamService.findTeamsByTournament(999L));
+                () -> teamService.findTeamsByTournament(999L, null, null, null, null));
 
         verify(teamRepository, never()).findActiveTeamsByTournamentId(any());
     }
@@ -443,9 +510,311 @@ class TeamServiceTest {
         when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
         when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of());
 
-        List<TeamResponse> responses = teamService.findTeamsByTournament(10L);
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, null, null, null);
 
         assertTrue(responses.isEmpty());
+    }
+
+    @Test
+    void findTeamsByTournament_nameが空白のみの場合は条件なしとして全件取得する() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(team));
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, "   ", null, null, null);
+
+        assertEquals(1, responses.size());
+        verify(teamRepository, never())
+                .findActiveTeamsByTournamentIdAndNameContainingIgnoreCase(any(), any());
+    }
+
+    @Test
+    void findTeamsByTournament_name指定時はContainingIgnoreCase検索を前後空白を除いて使用する() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentIdAndNameContainingIgnoreCase(10L, "ryu"))
+                .thenReturn(List.of(team));
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, "  ryu  ", null, null, null);
+
+        assertEquals(1, responses.size());
+        verify(teamRepository, times(1))
+                .findActiveTeamsByTournamentIdAndNameContainingIgnoreCase(10L, "ryu");
+        verify(teamRepository, never()).findActiveTeamsByTournamentId(any());
+    }
+
+    @Test
+    void findTeamsByTournament_characterId指定時は対象characterIdをcharacterRequirementsに含むTeamのみ返す() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team matchingTeam = mockFullTeam(100L, tournament, owner);
+        lenient().when(matchingTeam.getCharacterRequirements()).thenReturn(List.of(1L, 2L));
+        Team otherTeam = mockFullTeam(200L, tournament, owner);
+        lenient().when(otherTeam.getCharacterRequirements()).thenReturn(List.of(3L));
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(matchingTeam, otherTeam));
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, 2L, null, null);
+
+        assertEquals(1, responses.size());
+        assertEquals(100L, responses.get(0).id());
+    }
+
+    @Test
+    void findTeamsByTournament_characterId指定時characterRequirementsがnullのTeamは含まれない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team teamWithoutRequirement = mockFullTeam(100L, tournament, owner);
+        lenient().when(teamWithoutRequirement.getCharacterRequirements()).thenReturn(null);
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(teamWithoutRequirement));
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, 1L, null, null);
+
+        assertTrue(responses.isEmpty());
+    }
+
+    @Test
+    void findTeamsByTournament_characterIdに該当するTeamが存在しない場合は空Listを返す() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+        lenient().when(team.getCharacterRequirements()).thenReturn(List.of(1L));
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(team));
+
+        // 999Lは存在しないcharacterIdだが、特別扱いせず単に0件として返す(既存APIの方針と同様)。
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, 999L, null, null);
+
+        assertTrue(responses.isEmpty());
+    }
+
+    // rank境界: DIAMONDのプレイヤーはIRON(低)要求のチームも満たせる。
+    @Test
+    void findTeamsByTournament_rank指定時プレイヤーランクが要求ランクより高い場合は対象になる() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+        lenient().when(team.getRankRequirement()).thenReturn("IRON");
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(team));
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, null, "DIAMOND", null);
+
+        assertEquals(1, responses.size());
+    }
+
+    // rank境界: DIAMONDのプレイヤーはDIAMOND(同じ)要求のチームを満たせる(完全一致検索ではないが
+    // 同一ランクは当然満たせる)。
+    @Test
+    void findTeamsByTournament_rank指定時プレイヤーランクが要求ランクと同じ場合は対象になる() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+        lenient().when(team.getRankRequirement()).thenReturn("DIAMOND");
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(team));
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, null, "DIAMOND", null);
+
+        assertEquals(1, responses.size());
+    }
+
+    // rank境界: DIAMONDのプレイヤーはMASTER(高)要求のチームを満たせない(対象外)。
+    @Test
+    void findTeamsByTournament_rank指定時プレイヤーランクが要求ランクより低い場合は対象外になる() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+        lenient().when(team.getRankRequirement()).thenReturn("MASTER");
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(team));
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, null, "DIAMOND", null);
+
+        assertTrue(responses.isEmpty());
+    }
+
+    // rankRequirement=null(指定なし)のTeamは、どのrankを指定しても常に対象になる。
+    @Test
+    void findTeamsByTournament_rank指定時rankRequirementがnullのTeamは常に対象になる() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+        lenient().when(team.getRankRequirement()).thenReturn(null);
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(team));
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, null, "ROOKIE", null);
+
+        assertEquals(1, responses.size());
+    }
+
+    @Test
+    void findTeamsByTournament_rankが不正な値の場合_InvalidRequestExceptionを投げる() {
+        Tournament tournament = mockTournament();
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+
+        assertThrows(
+                InvalidRequestException.class,
+                () -> teamService.findTeamsByTournament(10L, null, null, "INVALID_RANK", null));
+    }
+
+    // availableの一括集計結果projection(TeamActiveMemberCount)のテスト用mock。
+    private TeamActiveMemberCount mockActiveMemberCount(Long teamId, long activeMemberCount) {
+        TeamActiveMemberCount result = mock(TeamActiveMemberCount.class);
+        lenient().when(result.getTeamId()).thenReturn(teamId);
+        lenient().when(result.getActiveMemberCount()).thenReturn(activeMemberCount);
+        return result;
+    }
+
+    // available=trueでは、Teamごとのcount queryをループ呼び出しするのではなく、対象Team群を
+    // 1回のcountActiveMembersByTeamIdsでまとめて取得した結果から判定する(N+1回避の確認)。
+    @Test
+    void findTeamsByTournament_available指定時は一括集計結果から定員未満のTeamのみ返す() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        when(tournament.getTeamSize()).thenReturn(2);
+        Team availableTeam = mockFullTeam(100L, tournament, owner);
+        Team fullTeam = mockFullTeam(200L, tournament, owner);
+
+        // Mockitoの制約上、thenReturn()の引数(mockActiveMemberCountの呼び出し)は、外側のwhen()を
+        // 呼び出す前に完全に評価しておく必要がある(whenの引数評価後、内側で新たなmock生成・
+        // stubbingを行うと「Unfinished stubbing」として検出されるため)。
+        List<TeamActiveMemberCount> activeMemberCounts =
+                List.of(mockActiveMemberCount(100L, 1L), mockActiveMemberCount(200L, 2L));
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(availableTeam, fullTeam));
+        when(teamMemberRepository.countActiveMembersByTeamIds(List.of(100L, 200L)))
+                .thenReturn(activeMemberCounts);
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, null, null, true);
+
+        assertEquals(1, responses.size());
+        assertEquals(100L, responses.get(0).id());
+        verify(teamMemberRepository, times(1)).countActiveMembersByTeamIds(List.of(100L, 200L));
+        // available検索の経路では、単一Team用のcountメソッド(応募承認時に使用するもの)は
+        // Teamごとに呼ばれない。
+        verify(teamMemberRepository, never()).countByTeam_IdAndUser_DeleteFlagFalse(any());
+    }
+
+    // GROUP BYで有効なTeamMemberが1人も存在しないTeamは集計結果に含まれないため、
+    // 呼び出し側でそのTeamを0人として扱えていることを確認する。
+    @Test
+    void findTeamsByTournament_available指定時TeamMemberが0人のTeamも0人として空きあり扱いになる() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        when(tournament.getTeamSize()).thenReturn(2);
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(team));
+        when(teamMemberRepository.countActiveMembersByTeamIds(List.of(100L))).thenReturn(List.of());
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, null, null, true);
+
+        assertEquals(1, responses.size());
+    }
+
+    // available=falseは「絞り込まない(全件)」。availableの絞り込みはtrueの時のみ行う。
+    // 絞り込みを行わないため、一括集計query自体を呼ぶ必要がない。
+    @Test
+    void findTeamsByTournament_availableがfalseの場合は絞り込まず一括集計queryも呼ばない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team fullTeam = mockFullTeam(200L, tournament, owner);
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(fullTeam));
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, null, null, false);
+
+        assertEquals(1, responses.size());
+        verify(teamMemberRepository, never()).countActiveMembersByTeamIds(any());
+        verify(teamMemberRepository, never()).countByTeam_IdAndUser_DeleteFlagFalse(any());
+    }
+
+    // available未指定(null)でも絞り込みを行わないため、一括集計queryを呼ばない。
+    @Test
+    void findTeamsByTournament_available未指定の場合は絞り込まず一括集計queryも呼ばない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(team));
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, null, null, null);
+
+        assertEquals(1, responses.size());
+        verify(teamMemberRepository, never()).countActiveMembersByTeamIds(any());
+    }
+
+    // 「現在有効なメンバー数」の定義統一: 3件のTeamMemberが存在しても1人がdeleteFlag=trueなら
+    // 有効人数は2 → 定員2のTeamでも空きありとして対象になる(集計クエリ自体がdelete_flag=falseの
+    // Userのみを数える前提で実装されていることの確認。実際のdelete_flag除外自体は
+    // TeamMemberRepositoryTestで実DB上確認している)。
+    @Test
+    void findTeamsByTournament_deleteFlagtrueのメンバーは有効人数に含めないため定員ちょうどでも空きあり扱いになる() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        when(tournament.getTeamSize()).thenReturn(2);
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        // 全件(3件、delete_flag=trueのUserを含む)ではなく、有効人数(1件)を返すようstubする。
+        List<TeamActiveMemberCount> activeMemberCounts = List.of(mockActiveMemberCount(100L, 1L));
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentId(10L)).thenReturn(List.of(team));
+        when(teamMemberRepository.countActiveMembersByTeamIds(List.of(100L))).thenReturn(activeMemberCounts);
+
+        List<TeamResponse> responses = teamService.findTeamsByTournament(10L, null, null, null, true);
+
+        assertEquals(1, responses.size());
+    }
+
+    @Test
+    void findTeamsByTournament_nameとcharacterIdとrankとavailableを組み合わせた場合_すべての条件で絞り込む() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        when(tournament.getTeamSize()).thenReturn(2);
+
+        Team matchingTeam = mockFullTeam(100L, tournament, owner);
+        lenient().when(matchingTeam.getCharacterRequirements()).thenReturn(List.of(1L));
+        lenient().when(matchingTeam.getRankRequirement()).thenReturn("IRON");
+
+        // name検索には一致するが、characterIdで除外されるTeam(available判定まで到達しない)。
+        Team nameMatchesButWrongCharacter = mockFullTeam(200L, tournament, owner);
+        lenient().when(nameMatchesButWrongCharacter.getCharacterRequirements()).thenReturn(List.of(9L));
+        lenient().when(nameMatchesButWrongCharacter.getRankRequirement()).thenReturn("IRON");
+
+        // characterIdフィルタ後に残るのはmatchingTeam(100L)のみのため、一括集計もそのIDのみで呼ばれる。
+        List<TeamActiveMemberCount> activeMemberCounts = List.of(mockActiveMemberCount(100L, 1L));
+
+        when(tournamentRepository.findByIdAndDeleteFlagFalse(10L)).thenReturn(Optional.of(tournament));
+        when(teamRepository.findActiveTeamsByTournamentIdAndNameContainingIgnoreCase(10L, "ryu"))
+                .thenReturn(List.of(matchingTeam, nameMatchesButWrongCharacter));
+        when(teamMemberRepository.countActiveMembersByTeamIds(List.of(100L))).thenReturn(activeMemberCounts);
+
+        List<TeamResponse> responses =
+                teamService.findTeamsByTournament(10L, "ryu", 1L, "DIAMOND", true);
+
+        assertEquals(1, responses.size());
+        assertEquals(100L, responses.get(0).id());
     }
 
     @Test
@@ -654,6 +1023,65 @@ class TeamServiceTest {
 
         assertEquals("Character not found. character_id=999", exception.getMessage());
         verify(team, never()).updateCharacterRequirements(any());
+        verify(teamRepository, never()).flush();
+    }
+
+    // rankRequirementをnull(指定なし)へ明示的に更新できる。
+    @Test
+    void updateTeam_rankRequirementを明示的nullへ更新できる() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        TeamUpdateRequest request = new TeamUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.of(null),
+                JsonNullable.undefined(), JsonNullable.undefined());
+
+        teamService.updateTeam(1L, 100L, request);
+
+        verify(team).updateRankRequirement(null);
+        verify(teamRepository, times(1)).flush();
+    }
+
+    // rankRequirementがRank enumの値であれば更新できる。
+    @Test
+    void updateTeam_rankRequirementがRankenumの値の場合_更新できる() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        TeamUpdateRequest request = new TeamUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.of("ROOKIE"),
+                JsonNullable.undefined(), JsonNullable.undefined());
+
+        teamService.updateTeam(1L, 100L, request);
+
+        verify(team).updateRankRequirement("ROOKIE");
+        verify(teamRepository, times(1)).flush();
+    }
+
+    @Test
+    void updateTeam_rankRequirementが不正な値の場合_InvalidRequestExceptionを投げTeamは更新されない() {
+        User owner = mockOwner();
+        Tournament tournament = mockTournament();
+        Team team = mockFullTeam(100L, tournament, owner);
+
+        when(teamRepository.findActiveTeamById(100L)).thenReturn(Optional.of(team));
+
+        TeamUpdateRequest request = new TeamUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.of("GRANDMASTER"),
+                JsonNullable.undefined(), JsonNullable.undefined());
+
+        InvalidRequestException exception = assertThrows(
+                InvalidRequestException.class,
+                () -> teamService.updateTeam(1L, 100L, request));
+
+        assertEquals("Invalid rankRequirement specified: GRANDMASTER", exception.getMessage());
+        verify(team, never()).updateRankRequirement(any());
         verify(teamRepository, never()).flush();
     }
 

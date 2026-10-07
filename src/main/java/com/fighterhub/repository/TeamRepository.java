@@ -52,6 +52,23 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
             """)
     List<Team> findActiveTeamsByTournamentId(@Param("tournamentId") Long tournamentId);
 
+    // findActiveTeamsByTournamentIdにチーム名の部分一致(大文字小文字非区別)を加えたもの。
+    // UPPER(...) LIKE UPPER(...)は、Tournament検索のContainingIgnoreCase(derived query)と
+    // 同じ大文字小文字非区別の意味になるよう明示的にJPQLで表現したもの
+    // (deleteFlag条件が複数Entityにまたがるため、ここもderived queryではなくJPQLを使用する)。
+    @Query("""
+            SELECT t FROM Team t
+            JOIN FETCH t.tournament tour
+            JOIN FETCH t.owner o
+            WHERE tour.id = :tournamentId
+              AND UPPER(t.name) LIKE UPPER(CONCAT('%', :name, '%'))
+              AND t.deleteFlag = false
+              AND tour.deleteFlag = false
+              AND o.deleteFlag = false
+            """)
+    List<Team> findActiveTeamsByTournamentIdAndNameContainingIgnoreCase(
+            @Param("tournamentId") Long tournamentId, @Param("name") String name);
+
     // 同じTeamに対して複数Applicationがほぼ同時にapproveされた場合に、両Transactionが
     // 同じmember countを見て定員を超過することを防止するための行ロック付き取得。
     // 有効Teamの判定条件はfindActiveTeamByIdと同じ。ロック対象をTeam行のみに限定するため、

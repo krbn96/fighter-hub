@@ -15,7 +15,14 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
     boolean existsByTeam_IdAndUser_Id(Long teamId, Long userId);
 
     // Team定員チェック用。ownerも含めた現在のTeamMember数を取得する。
+    // delete_flag=trueのUserも含めてしまうため、定員判定自体にはこちらではなく
+    // countByTeam_IdAndUser_DeleteFlagFalseを使用する(「現在有効なメンバー数」の定義を統一するため)。
     long countByTeam_Id(Long teamId);
+
+    // 「現在有効なメンバー数」= TeamMemberに紐づくUserのdelete_flag=falseで統一する。
+    // 公開メンバー表示(findActiveTeamMembersByTeamId)と同じUser有効性条件を、
+    // 定員判定(応募承認時・チーム検索のavailable)でも使用するためのcount版。
+    long countByTeam_IdAndUser_DeleteFlagFalse(Long teamId);
 
     // teamId+userIdで一意に絞り込めるため、JOIN FETCH不要のderived query。
     Optional<TeamMember> findByTeam_IdAndUser_Id(Long teamId, Long userId);
@@ -52,4 +59,17 @@ public interface TeamMemberRepository extends JpaRepository<TeamMember, Long> {
             ORDER BY tm.joinedAt ASC
             """)
     List<TeamMember> findActiveTeamMembersByTeamId(@Param("teamId") Long teamId);
+
+    // チーム検索のavailable判定用。対象Team群の有効メンバー数(delete_flag=falseのUserのみ)を
+    // Teamごとのcount queryに分割せず1回のクエリでまとめて取得する(N+1回避)。
+    // GROUP BYのため、TeamMemberが0人(または有効なTeamMemberが0人)のTeamは結果に含まれない。
+    // 呼び出し側でそのTeamは0件として扱う必要がある。
+    @Query("""
+            SELECT tm.team.id AS teamId, COUNT(tm) AS activeMemberCount
+            FROM TeamMember tm
+            WHERE tm.team.id IN :teamIds
+              AND tm.user.deleteFlag = false
+            GROUP BY tm.team.id
+            """)
+    List<TeamActiveMemberCount> countActiveMembersByTeamIds(@Param("teamIds") List<Long> teamIds);
 }

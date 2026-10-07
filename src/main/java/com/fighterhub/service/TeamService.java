@@ -3,6 +3,8 @@ package com.fighterhub.service;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,6 +14,7 @@ import com.fighterhub.dto.TeamCreateResponse;
 import com.fighterhub.dto.TeamMemberResponse;
 import com.fighterhub.dto.TeamResponse;
 import com.fighterhub.dto.TeamUpdateRequest;
+import com.fighterhub.entity.Rank;
 import com.fighterhub.entity.Team;
 import com.fighterhub.entity.TeamMember;
 import com.fighterhub.entity.Tournament;
@@ -26,6 +29,7 @@ import com.fighterhub.exception.TeamNotFoundException;
 import com.fighterhub.exception.TournamentNotFoundException;
 import com.fighterhub.exception.UserNotFoundException;
 import com.fighterhub.repository.CharacterRepository;
+import com.fighterhub.repository.TeamActiveMemberCount;
 import com.fighterhub.repository.TeamMemberRepository;
 import com.fighterhub.repository.TeamRepository;
 import com.fighterhub.repository.TournamentRepository;
@@ -77,6 +81,7 @@ public class TeamService {
             throw new DuplicateTournamentMembershipException(userId, tournament.getId());
         }
 
+        validateRankRequirement(request.rankRequirement());
         validateCharacterRequirements(request.characterRequirements());
 
         Team team = Team.create(
@@ -115,14 +120,94 @@ public class TeamService {
         return toTeamResponse(team);
     }
 
+    // name/characterId/rank/availableはすべて任意(未指定時は絞り込まない)。複数条件指定時はAND。
     @Transactional(readOnly = true)
-    public List<TeamResponse> findTeamsByTournament(Long tournamentId) {
+    public List<TeamResponse> findTeamsByTournament(
+            Long tournamentId, String name, Long characterId, String rank, Boolean available) {
         tournamentRepository.findByIdAndDeleteFlagFalse(tournamentId)
                 .orElseThrow(() -> new TournamentNotFoundException(tournamentId));
 
-        return teamRepository.findActiveTeamsByTournamentId(tournamentId).stream()
+        String trimmedName = name == null ? null : name.trim();
+
+        List<Team> teams = (trimmedName == null || trimmedName.isEmpty())
+                ? teamRepository.findActiveTeamsByTournamentId(tournamentId)
+                : teamRepository.findActiveTeamsByTournamentIdAndNameContainingIgnoreCase(
+                        tournamentId, trimmedName);
+
+        // characterIdはTeam.characterRequirements(JSONB配列)への単純な包含チェック。
+        // 存在しないcharacterId等を指定した場合もエラーにはせず、該当チームが0件の検索結果として
+        // 扱う(nameのような他の検索条件と同じ方針。characterRequirements自体は書き込み時に
+        // CharacterRepositoryで実在確認済みのため、検索時に再度存在確認する必要はない)。
+        if (characterId != null) {
+            teams = teams.stream()
+                    .filter(team -> team.getCharacterRequirements() != null
+                            && team.getCharacterRequirements().contains(characterId))
+                    .toList();
+        }
+
+        if (rank != null) {
+            Rank playerRank = Rank.fromValue(rank)
+                    .orElseThrow(() -> new InvalidRequestException("Invalid rank specified: " + rank));
+
+            teams = teams.stream()
+                    .filter(team -> satisfiesRankRequirement(playerRank, team.getRankRequirement()))
+                    .toList();
+        }
+
+        if (Boolean.TRUE.equals(available)) {
+            teams = filterByAvailability(teams);
+        }
+
+        return teams.stream()
                 .map(this::toTeamResponse)
                 .toList();
+    }
+
+    // 「そのランクのプレイヤーが応募条件を満たせるチーム」= rankRequirementが未指定(指定なし)の
+    // チーム、またはplayerRankがrankRequirement以上のチーム。
+    // rankRequirementはvalidateRankRequirementにより書き込み時点でRank enumの値のみに限定されるが、
+    // この検証を追加する前に保存された既存データがRankへ変換できない値を保持している可能性に備え、
+    // そのようなデータは満たせるかどうかを判定できないため対象外として扱う(防御的な分岐)。
+    private boolean satisfiesRankRequirement(Rank playerRank, String rankRequirement) {
+        if (rankRequirement == null) {
+            return true;
+        }
+
+        return Rank.fromValue(rankRequirement)
+                .map(playerRank::satisfies)
+                .orElse(false);
+    }
+
+    // 「現在有効なメンバー数」(TeamMemberに紐づくUserのdelete_flag=false)がTournament.teamSize
+    // 未満のTeamのみに絞り込む。対象Team群の有効メンバー数は、Teamごとのcount queryをループ内から
+    // 呼ぶ(N+1)のではなく、countActiveMembersByTeamIdsで1回のクエリにまとめて取得する。
+    // 応募承認時の定員判定(RecruitmentApplicationService)は単一Teamの判定のため、
+    // 既存のcountByTeam_IdAndUser_DeleteFlagFalseをそのまま使用する(こちらは変更しない)。
+    private List<Team> filterByAvailability(List<Team> teams) {
+        if (teams.isEmpty()) {
+            return teams;
+        }
+
+        List<Long> teamIds = teams.stream().map(Team::getId).toList();
+
+        // GROUP BYのため、有効なTeamMemberが1人も存在しないTeamは結果に含まれない。
+        // そのTeamはgetOrDefaultで0人として扱う(TeamMember 0人のTeamも正しく空きあり扱いになる)。
+        Map<Long, Long> activeMemberCountByTeamId = teamMemberRepository.countActiveMembersByTeamIds(teamIds)
+                .stream()
+                .collect(Collectors.toMap(TeamActiveMemberCount::getTeamId, TeamActiveMemberCount::getActiveMemberCount));
+
+        return teams.stream()
+                .filter(team -> activeMemberCountByTeamId.getOrDefault(team.getId(), 0L)
+                        < team.getTournament().getTeamSize())
+                .toList();
+    }
+
+    // rankRequirementはnull(指定なし)を許可し、null以外はRank enum(8値)のいずれかであることを
+    // 検証する(ランク定義をここで重複させず、既存のRank enumを再利用する)。
+    private void validateRankRequirement(String rankRequirement) {
+        if (rankRequirement != null && !Rank.isValid(rankRequirement)) {
+            throw new InvalidRequestException("Invalid rankRequirement specified: " + rankRequirement);
+        }
     }
 
     // 「ownerであるTeam」ではなく、T_TEAM_MEMBERSを基準に所属しているTeamを返す。
@@ -147,7 +232,9 @@ public class TeamService {
         }
 
         if (!request.rankRequirement().isUndefined()) {
-            team.updateRankRequirement(request.rankRequirement().get());
+            String rankRequirement = request.rankRequirement().get();
+            validateRankRequirement(rankRequirement);
+            team.updateRankRequirement(rankRequirement);
         }
 
         if (!request.characterRequirements().isUndefined()) {

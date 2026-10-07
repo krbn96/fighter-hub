@@ -309,7 +309,7 @@ class SecurityConfigTest {
 
     @Test
     void GET_apiTournaments数値idteamsは認証なしでpermitAllとなる() throws Exception {
-        when(teamService.findTeamsByTournament(1L)).thenReturn(java.util.List.of());
+        when(teamService.findTeamsByTournament(1L, null, null, null, null)).thenReturn(java.util.List.of());
 
         mockMvc.perform(get("/api/tournaments/1/teams"))
                 .andExpect(status().isOk());
