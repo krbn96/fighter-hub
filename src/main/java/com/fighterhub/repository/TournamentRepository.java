@@ -12,4 +12,6 @@ public interface TournamentRepository extends JpaRepository<Tournament, Long> {
     Optional<Tournament> findByIdAndDeleteFlagFalse(Long id);
 
     List<Tournament> findAllByDeleteFlagFalse();
+
+    List<Tournament> findAllByDeleteFlagFalseAndNameContainingIgnoreCase(String name);
 }

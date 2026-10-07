@@ -84,7 +84,7 @@ class TournamentControllerTest {
 
     @Test
     void findAllTournaments_認証なしで200を返し一覧を取得できる() throws Exception {
-        when(tournamentService.findAllTournaments()).thenReturn(List.of(sampleResponse(1L)));
+        when(tournamentService.findAllTournaments(null, null)).thenReturn(List.of(sampleResponse(1L)));
 
         mockMvc.perform(get("/api/tournaments"))
                 .andExpect(status().isOk())
@@ -93,6 +93,51 @@ class TournamentControllerTest {
                 .andExpect(jsonPath("$[0].teamSize").value(3))
                 .andExpect(jsonPath("$[0].maxPlayers").value(64))
                 .andExpect(jsonPath("$[0].recruitmentDeadline").value("2026-09-30T23:59:00"));
+    }
+
+    @Test
+    void findAllTournaments_nameクエリパラメータをServiceへそのまま渡す() throws Exception {
+        when(tournamentService.findAllTournaments("street", null))
+                .thenReturn(List.of(sampleResponse(1L)));
+
+        mockMvc.perform(get("/api/tournaments").param("name", "street"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1));
+
+        verify(tournamentService, times(1)).findAllTournaments("street", null);
+    }
+
+    @Test
+    void findAllTournaments_recruitingクエリパラメータをServiceへそのまま渡す() throws Exception {
+        when(tournamentService.findAllTournaments(null, true))
+                .thenReturn(List.of(sampleResponse(1L)));
+
+        mockMvc.perform(get("/api/tournaments").param("recruiting", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1));
+
+        verify(tournamentService, times(1)).findAllTournaments(null, true);
+    }
+
+    @Test
+    void findAllTournaments_nameとrecruitingの両方指定時は両方をServiceへ渡す() throws Exception {
+        when(tournamentService.findAllTournaments("street", false))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/tournaments").param("name", "street").param("recruiting", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
+
+        verify(tournamentService, times(1)).findAllTournaments("street", false);
+    }
+
+    @Test
+    void findAllTournaments_recruitingがBooleanとして解釈できない場合_400を返しServiceは呼ばれない() throws Exception {
+        mockMvc.perform(get("/api/tournaments").param("recruiting", "invalid-value"))
+                .andExpect(status().isBadRequest());
+
+        verify(tournamentService, never()).findAllTournaments(any(), any());
     }
 
     @Test

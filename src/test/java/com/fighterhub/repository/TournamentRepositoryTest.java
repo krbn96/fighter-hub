@@ -59,9 +59,33 @@ class TournamentRepositoryTest {
         assertFalse(foundIds.contains(deletedTournament.getId()));
     }
 
+    @Test
+    void findAllByDeleteFlagFalseAndNameContainingIgnoreCase_大文字小文字を区別せず部分一致し論理削除済みは除外する() {
+        String uniqueSuffix = UUID.randomUUID().toString();
+        Tournament activeTournament = createTournament("STREET FIGHTER 6 CUP " + uniqueSuffix);
+        Tournament deletedTournament = createTournament("STREET FIGHTER 6 CUP " + uniqueSuffix);
+        Tournament unrelatedTournament = createTournament("TEKKEN 8 CUP " + uniqueSuffix);
+
+        jdbcTemplate.update("UPDATE t_tournaments SET delete_flag = true WHERE id = ?", deletedTournament.getId());
+
+        List<Long> foundIds = tournamentRepository
+                .findAllByDeleteFlagFalseAndNameContainingIgnoreCase("street fighter")
+                .stream()
+                .map(Tournament::getId)
+                .toList();
+
+        assertTrue(foundIds.contains(activeTournament.getId()));
+        assertFalse(foundIds.contains(deletedTournament.getId()));
+        assertFalse(foundIds.contains(unrelatedTournament.getId()));
+    }
+
     private Tournament createTournament() {
+        return createTournament("Test Cup " + UUID.randomUUID());
+    }
+
+    private Tournament createTournament(String name) {
         Tournament tournament = tournamentRepository.save(Tournament.create(
-                "Test Cup " + UUID.randomUUID(), 3, LocalDateTime.now(), LocalDateTime.now().minusDays(1),
+                name, 3, LocalDateTime.now(), LocalDateTime.now().minusDays(1),
                 24));
         createdTournamentIds.add(tournament.getId());
 

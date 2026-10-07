@@ -1,5 +1,6 @@
 package com.fighterhub.service;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -24,15 +25,36 @@ public class TournamentService {
 
     private final TournamentRepository tournamentRepository;
     private final UserRepository userRepository;
+    private final Clock clock;
 
-    public TournamentService(TournamentRepository tournamentRepository, UserRepository userRepository) {
+    public TournamentService(
+            TournamentRepository tournamentRepository,
+            UserRepository userRepository,
+            Clock clock) {
         this.tournamentRepository = tournamentRepository;
         this.userRepository = userRepository;
+        this.clock = clock;
     }
 
+    // name(大会名の部分一致・大文字小文字非区別)とrecruiting(募集中/募集終了)はどちらも省略可能。
+    // recruitingはDBカラムを持たず、Tournament.isRecruitmentOpenへ現在時刻(Clock経由)を渡して
+    // 都度判定する既存の境界値仕様(締切ちょうどはCLOSED)をそのまま利用する。
     @Transactional(readOnly = true)
-    public List<TournamentResponse> findAllTournaments() {
-        return tournamentRepository.findAllByDeleteFlagFalse().stream()
+    public List<TournamentResponse> findAllTournaments(String name, Boolean recruiting) {
+        String trimmedName = name == null ? null : name.trim();
+
+        List<Tournament> tournaments = trimmedName == null || trimmedName.isEmpty()
+                ? tournamentRepository.findAllByDeleteFlagFalse()
+                : tournamentRepository.findAllByDeleteFlagFalseAndNameContainingIgnoreCase(trimmedName);
+
+        if (recruiting != null) {
+            LocalDateTime now = LocalDateTime.now(clock);
+            tournaments = tournaments.stream()
+                    .filter(tournament -> tournament.isRecruitmentOpen(now) == recruiting)
+                    .toList();
+        }
+
+        return tournaments.stream()
                 .map(this::toTournamentResponse)
                 .toList();
     }

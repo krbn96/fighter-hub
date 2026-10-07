@@ -638,7 +638,29 @@ paths:
   /tournaments:
     get:
       summary: 大会一覧取得
-      description: 有効な大会の一覧を取得する(delete_flag=falseの大会のみ)
+      description: |
+        有効な大会の一覧を取得する(delete_flag=falseの大会のみ)。
+        name/recruitingはいずれも任意で、指定しない場合は絞り込みを行わない。
+      parameters:
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 大会名の部分一致検索(大文字小文字を区別しない)。未指定または空白のみの場合は条件なし。
+          example: street
+
+        - name: recruiting
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: |
+            募集状態での絞り込み。trueは募集中のみ、falseは募集終了のみ、未指定はすべて。
+            募集状態はDBカラムではなく、recruitmentDeadlineと現在時刻から判定する
+            (締切ちょうどは募集終了として扱う)。
+          example: true
+
       responses:
         '200':
           description: 取得成功
@@ -648,6 +670,13 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/TournamentResponse'
+
+        '400':
+          description: recruitingがbooleanとして解釈できない
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
         '500':
           description: サーバーエラー

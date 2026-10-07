@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -47,11 +48,20 @@ public class TournamentController {
     @Operation(
         summary = "大会一覧取得",
         description = "有効な大会の一覧を取得します。"
+            + "nameを指定すると大会名の部分一致(大文字小文字非区別)で絞り込みます。"
+            + "recruitingを指定すると募集中(true)/募集終了(false)で絞り込みます。"
     )
     @ApiResponses({
         @ApiResponse(
             responseCode = "200",
             description = "取得成功"
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "recruitingがBooleanとして解釈できない",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
         ),
         @ApiResponse(
             responseCode = "500",
@@ -62,8 +72,10 @@ public class TournamentController {
         )
     })
     @GetMapping
-    public List<TournamentResponse> findAllTournaments() {
-        return tournamentService.findAllTournaments();
+    public List<TournamentResponse> findAllTournaments(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) Boolean recruiting) {
+        return tournamentService.findAllTournaments(name, recruiting);
     }
 
     @Operation(

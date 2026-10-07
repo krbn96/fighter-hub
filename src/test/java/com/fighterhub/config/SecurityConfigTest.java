@@ -293,7 +293,7 @@ class SecurityConfigTest {
 
     @Test
     void GET_apiTournamentsは認証なしでpermitAllとなる() throws Exception {
-        when(tournamentService.findAllTournaments()).thenReturn(java.util.List.of());
+        when(tournamentService.findAllTournaments(null, null)).thenReturn(java.util.List.of());
 
         mockMvc.perform(get("/api/tournaments"))
                 .andExpect(status().isOk());

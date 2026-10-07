@@ -11,10 +11,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -45,8 +49,19 @@ class TournamentServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private Clock clock;
+
     @InjectMocks
     private TournamentService tournamentService;
+
+    // name/recruitingを指定しないテストではClockの具体的な値を気にしないため、
+    // TeamServiceTestと同じ方針でlenientな最低限のstubを用意する。
+    @BeforeEach
+    void setUpClock() {
+        lenient().when(clock.instant()).thenReturn(Instant.now());
+        lenient().when(clock.getZone()).thenReturn(ZoneOffset.UTC);
+    }
 
     private User mockUser(UserRole role) {
         User user = mock(User.class);
@@ -95,11 +110,11 @@ class TournamentServiceTest {
     }
 
     @Test
-    void findAllTournaments_有効なTournamentをResponseへ変換して返す() {
+    void findAllTournaments_nameとrecruiting未指定の場合_従来どおり全件を返す() {
         Tournament tournament = mockTournament();
         when(tournamentRepository.findAllByDeleteFlagFalse()).thenReturn(List.of(tournament));
 
-        List<TournamentResponse> responses = tournamentService.findAllTournaments();
+        List<TournamentResponse> responses = tournamentService.findAllTournaments(null, null);
 
         assertEquals(1, responses.size());
         TournamentResponse response = responses.get(0);
@@ -107,15 +122,115 @@ class TournamentServiceTest {
         assertEquals("STREET FIGHTER 6 CUP", response.name());
         assertEquals(3, response.teamSize());
         assertEquals(64, response.maxPlayers());
+        verify(tournamentRepository, never()).findAllByDeleteFlagFalseAndNameContainingIgnoreCase(any());
     }
 
     @Test
     void findAllTournaments_0件の場合は空Listを返す() {
         when(tournamentRepository.findAllByDeleteFlagFalse()).thenReturn(List.of());
 
-        List<TournamentResponse> responses = tournamentService.findAllTournaments();
+        List<TournamentResponse> responses = tournamentService.findAllTournaments(null, null);
 
         assertEquals(0, responses.size());
+    }
+
+    @Test
+    void findAllTournaments_nameが空白のみの場合は条件なしとして全件取得する() {
+        Tournament tournament = mockTournament();
+        when(tournamentRepository.findAllByDeleteFlagFalse()).thenReturn(List.of(tournament));
+
+        List<TournamentResponse> responses = tournamentService.findAllTournaments("   ", null);
+
+        assertEquals(1, responses.size());
+        verify(tournamentRepository, never()).findAllByDeleteFlagFalseAndNameContainingIgnoreCase(any());
+    }
+
+    @Test
+    void findAllTournaments_name指定時はContainingIgnoreCase検索を前後空白を除いて使用する() {
+        Tournament tournament = mockTournament();
+        when(tournamentRepository.findAllByDeleteFlagFalseAndNameContainingIgnoreCase("street"))
+                .thenReturn(List.of(tournament));
+
+        List<TournamentResponse> responses = tournamentService.findAllTournaments("  street  ", null);
+
+        assertEquals(1, responses.size());
+        verify(tournamentRepository, times(1))
+                .findAllByDeleteFlagFalseAndNameContainingIgnoreCase("street");
+        verify(tournamentRepository, never()).findAllByDeleteFlagFalse();
+    }
+
+    @Test
+    void findAllTournaments_recruitingがtrueの場合_募集中のみ返す() {
+        LocalDateTime now = LocalDateTime.of(2026, 1, 1, 0, 0);
+        Clock fixedClock = Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+        TournamentService serviceWithFixedClock =
+                new TournamentService(tournamentRepository, userRepository, fixedClock);
+
+        Tournament recruiting = Tournament.create(
+                "RECRUITING CUP", 3, now.plusDays(2), now.plusDays(1), 64);
+        Tournament closed = Tournament.create(
+                "CLOSED CUP", 3, now.plusDays(2), now.minusDays(1), 64);
+        when(tournamentRepository.findAllByDeleteFlagFalse()).thenReturn(List.of(recruiting, closed));
+
+        List<TournamentResponse> responses = serviceWithFixedClock.findAllTournaments(null, true);
+
+        assertEquals(1, responses.size());
+        assertEquals("RECRUITING CUP", responses.get(0).name());
+    }
+
+    @Test
+    void findAllTournaments_recruitingがfalseの場合_募集終了のみ返す() {
+        LocalDateTime now = LocalDateTime.of(2026, 1, 1, 0, 0);
+        Clock fixedClock = Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+        TournamentService serviceWithFixedClock =
+                new TournamentService(tournamentRepository, userRepository, fixedClock);
+
+        Tournament recruiting = Tournament.create(
+                "RECRUITING CUP", 3, now.plusDays(2), now.plusDays(1), 64);
+        Tournament closed = Tournament.create(
+                "CLOSED CUP", 3, now.plusDays(2), now.minusDays(1), 64);
+        when(tournamentRepository.findAllByDeleteFlagFalse()).thenReturn(List.of(recruiting, closed));
+
+        List<TournamentResponse> responses = serviceWithFixedClock.findAllTournaments(null, false);
+
+        assertEquals(1, responses.size());
+        assertEquals("CLOSED CUP", responses.get(0).name());
+    }
+
+    // 既存のisRecruitmentOpen境界値仕様(締切ちょうどはCLOSED)と一致させる。
+    @Test
+    void findAllTournaments_recruitmentDeadlineが現在時刻ちょうどの場合_募集終了として扱う() {
+        LocalDateTime deadline = LocalDateTime.of(2026, 1, 1, 0, 0);
+        Clock fixedClock = Clock.fixed(deadline.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+        TournamentService serviceWithFixedClock =
+                new TournamentService(tournamentRepository, userRepository, fixedClock);
+
+        Tournament tournament = Tournament.create(
+                "DEADLINE CUP", 3, deadline.plusDays(1), deadline, 64);
+        when(tournamentRepository.findAllByDeleteFlagFalse()).thenReturn(List.of(tournament));
+
+        assertEquals(0, serviceWithFixedClock.findAllTournaments(null, true).size());
+        assertEquals(1, serviceWithFixedClock.findAllTournaments(null, false).size());
+    }
+
+    @Test
+    void findAllTournaments_nameとrecruitingを組み合わせた場合_両方の条件で絞り込む() {
+        LocalDateTime now = LocalDateTime.of(2026, 1, 1, 0, 0);
+        Clock fixedClock = Clock.fixed(now.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
+        TournamentService serviceWithFixedClock =
+                new TournamentService(tournamentRepository, userRepository, fixedClock);
+
+        Tournament matching = Tournament.create(
+                "STREET FIGHTER 6 CUP", 3, now.plusDays(2), now.plusDays(1), 64);
+        Tournament nameMatchesButClosed = Tournament.create(
+                "STREET FIGHTER 6 CUP OLD", 3, now.plusDays(2), now.minusDays(1), 64);
+        when(tournamentRepository.findAllByDeleteFlagFalseAndNameContainingIgnoreCase("street"))
+                .thenReturn(List.of(matching, nameMatchesButClosed));
+
+        List<TournamentResponse> responses = serviceWithFixedClock.findAllTournaments("street", true);
+
+        assertEquals(1, responses.size());
+        assertEquals("STREET FIGHTER 6 CUP", responses.get(0).name());
     }
 
     @Test
