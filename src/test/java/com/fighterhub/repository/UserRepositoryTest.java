@@ -75,6 +75,40 @@ class UserRepositoryTest {
         assertTrue(userRepository.findByIdAndDeleteFlagFalseForUpdate(user.getId()).isEmpty());
     }
 
+    // Day 7品質調査で指摘された、論理削除Userがdiscord_idを保持したまま残る場合の
+    // 再連携不整合への対応。findByDiscordIdはdelete_flag条件を付けないため、
+    // 論理削除済みのUserも検出できることを確認する。
+    @Test
+    void findByDiscordId_論理削除されたUserもdiscordIdで検出できる() {
+        Long characterId = anyExistingCharacterId();
+        User user = createUser(characterId);
+        jdbcTemplate.update(
+                "UPDATE t_users SET discord_id = ? WHERE id = ?", "discord-deleted-holder", user.getId());
+        jdbcTemplate.update("UPDATE t_users SET delete_flag = true WHERE id = ?", user.getId());
+
+        Optional<User> found = userRepository.findByDiscordId("discord-deleted-holder");
+
+        assertTrue(found.isPresent());
+        assertEquals(user.getId(), found.get().getId());
+        assertTrue(found.get().isDeleteFlag());
+    }
+
+    // findByIdForUpdateはfindByIdAndDeleteFlagFalseForUpdateと異なりdelete_flag条件を
+    // 付けないため、論理削除済みのUserもlock付きで取得できる(discord_id解除処理の対象に
+    // するため)ことを確認する。
+    @Test
+    @Transactional
+    void findByIdForUpdate_論理削除されたUserもlock付きで取得できる() {
+        Long characterId = anyExistingCharacterId();
+        User user = createUser(characterId);
+        jdbcTemplate.update("UPDATE t_users SET delete_flag = true WHERE id = ?", user.getId());
+
+        Optional<User> found = userRepository.findByIdForUpdate(user.getId());
+
+        assertTrue(found.isPresent());
+        assertEquals(user.getId(), found.get().getId());
+    }
+
     private Long anyExistingCharacterId() {
         List<Character> characters = characterRepository.findAll();
         assumeFalse(characters.isEmpty(), "M_CHARACTERSにデータが存在しないため統合テストをスキップする");

@@ -1,7 +1,10 @@
 package com.fighterhub.discord;
 
+import java.time.Duration;
+
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -13,14 +16,31 @@ import com.fighterhub.config.DiscordOAuthProperties;
 // DiscordのOAuth token endpoint / /users/@me への通信のみを担当する。
 // 新規ライブラリは追加せず、既存依存(spring-boot-starter-webmvc経由のspring-web RestClient、
 // jackson-databind)のみで実装している。access/refresh tokenはこのクラスの外へ永続化しない。
+//
+// Discord側が低速・無応答の場合にリクエストスレッドを長時間専有しないよう、
+// connect timeout 5秒 / read timeout 10秒を明示設定する(Day 7調査で指摘された、
+// デフォルト設定のままだとタイムアウトが無期限に近いという問題への対応)。
+// 既存依存(spring-web)のSimpleClientHttpRequestFactoryのみを使用し、新規ライブラリは追加しない。
 @Component
 public class DiscordApiClient {
 
     private static final String TOKEN_URL = "https://discord.com/api/oauth2/token";
     private static final String USERS_ME_URL = "https://discord.com/api/users/@me";
 
-    private final RestClient restClient = RestClient.create();
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
+
+    private final RestClient restClient = RestClient.builder()
+            .requestFactory(createRequestFactory())
+            .build();
     private final DiscordOAuthProperties discordOAuthProperties;
+
+    private static SimpleClientHttpRequestFactory createRequestFactory() {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
+        requestFactory.setReadTimeout(READ_TIMEOUT);
+        return requestFactory;
+    }
 
     public DiscordApiClient(DiscordOAuthProperties discordOAuthProperties) {
         this.discordOAuthProperties = discordOAuthProperties;

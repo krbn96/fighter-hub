@@ -921,7 +921,7 @@ class UserServiceTest {
     @Test
     void linkDiscordAccount_未連携の場合_現在Userへ新規に連携する() {
         User currentUser = mock(User.class);
-        when(userRepository.findByDiscordIdAndDeleteFlagFalse("discord-1"))
+        when(userRepository.findByDiscordId("discord-1"))
                 .thenReturn(Optional.empty());
         when(userRepository.findByIdAndDeleteFlagFalseForUpdate(1L))
                 .thenReturn(Optional.of(currentUser));
@@ -931,13 +931,14 @@ class UserServiceTest {
         verify(currentUser).linkDiscordAccount("discord-1", "testuser");
         verify(currentUser, never()).unlinkDiscordAccount();
         verify(userRepository, times(1)).findByIdAndDeleteFlagFalseForUpdate(any());
+        verify(userRepository, never()).findByIdForUpdate(any());
     }
 
     @Test
     void linkDiscordAccount_自分自身に既に連携済みの場合_discordUsernameを更新するだけで解除処理は呼ばれない() {
         User currentUser = mock(User.class);
         when(currentUser.getId()).thenReturn(1L);
-        when(userRepository.findByDiscordIdAndDeleteFlagFalse("discord-1"))
+        when(userRepository.findByDiscordId("discord-1"))
                 .thenReturn(Optional.of(currentUser));
         when(userRepository.findByIdAndDeleteFlagFalseForUpdate(1L))
                 .thenReturn(Optional.of(currentUser));
@@ -948,10 +949,13 @@ class UserServiceTest {
         verify(currentUser, never()).unlinkDiscordAccount();
         // 対象が1User(自分自身)のみなので、ロック取得も1回だけで良い。
         verify(userRepository, times(1)).findByIdAndDeleteFlagFalseForUpdate(any());
+        verify(userRepository, never()).findByIdForUpdate(any());
     }
 
     // 正式business rule: 旧User/現Userのロック順序を常にID昇順に固定し、デッドロックを防ぐ。
     // currentUserId(2)が旧User(1)より大きい場合でも、ID昇順(1→2)でロックされることを確認する。
+    // 旧User(既存保持者)のロックはfindByIdForUpdate、現Userのロックは
+    // findByIdAndDeleteFlagFalseForUpdateと使い分けられることも併せて確認する。
     @Test
     void linkDiscordAccount_別ユーザーに連携済みの場合_旧Userを解除し現在Userへ付け替えID昇順でロックする() {
         User oldOwner = mock(User.class);
@@ -960,9 +964,9 @@ class UserServiceTest {
 
         User currentUser = mock(User.class);
 
-        when(userRepository.findByDiscordIdAndDeleteFlagFalse("discord-1"))
+        when(userRepository.findByDiscordId("discord-1"))
                 .thenReturn(Optional.of(oldOwner));
-        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(1L))
+        when(userRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(oldOwner));
         when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L))
                 .thenReturn(Optional.of(currentUser));
@@ -970,7 +974,7 @@ class UserServiceTest {
         userService.linkDiscordAccount(2L, "discord-1", "new-username");
 
         InOrder inOrder = inOrder(userRepository);
-        inOrder.verify(userRepository).findByIdAndDeleteFlagFalseForUpdate(1L);
+        inOrder.verify(userRepository).findByIdForUpdate(1L);
         inOrder.verify(userRepository).findByIdAndDeleteFlagFalseForUpdate(2L);
 
         verify(oldOwner).unlinkDiscordAccount();
@@ -987,17 +991,56 @@ class UserServiceTest {
 
         User currentUser = mock(User.class);
 
-        when(userRepository.findByDiscordIdAndDeleteFlagFalse("discord-1"))
+        when(userRepository.findByDiscordId("discord-1"))
                 .thenReturn(Optional.of(oldOwner));
         when(userRepository.findByIdAndDeleteFlagFalseForUpdate(1L))
                 .thenReturn(Optional.of(currentUser));
-        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L))
+        when(userRepository.findByIdForUpdate(2L))
                 .thenReturn(Optional.of(oldOwner));
 
         userService.linkDiscordAccount(1L, "discord-1", "new-username");
 
         verify(oldOwner, never()).unlinkDiscordAccount();
         verify(currentUser).linkDiscordAccount("discord-1", "new-username");
+    }
+
+    // Day 7品質調査で指摘された不整合への対応: 既存保持者が論理削除済み(delete_flag=true)でも
+    // findByDiscordIdで検出し、findByIdForUpdateでロックして解除できることを確認する。
+    @Test
+    void linkDiscordAccount_既存保持者が論理削除済みの場合でも検出し解除してから現在Userへ連携する() {
+        User deletedOldOwner = mock(User.class);
+        when(deletedOldOwner.getId()).thenReturn(1L);
+        when(deletedOldOwner.getDiscordId()).thenReturn("discord-1");
+
+        User currentUser = mock(User.class);
+
+        when(userRepository.findByDiscordId("discord-1"))
+                .thenReturn(Optional.of(deletedOldOwner));
+        when(userRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(deletedOldOwner));
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(2L))
+                .thenReturn(Optional.of(currentUser));
+
+        userService.linkDiscordAccount(2L, "discord-1", "new-username");
+
+        verify(deletedOldOwner).unlinkDiscordAccount();
+        verify(currentUser).linkDiscordAccount("discord-1", "new-username");
+    }
+
+    // 論理削除ユーザー自身への連携は許可しない: currentUserId自体がすでに論理削除されている場合、
+    // findByIdAndDeleteFlagFalseForUpdateが空を返しUserNotFoundExceptionになる
+    // (既存のアクティブUser限定の仕様を、既存保持者検索の変更後も維持する)。
+    @Test
+    void linkDiscordAccount_現在User自身が論理削除済みの場合_UserNotFoundExceptionを投げ連携しない() {
+        when(userRepository.findByDiscordId("discord-1"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByIdAndDeleteFlagFalseForUpdate(1L))
+                .thenReturn(Optional.empty());
+
+        assertThrows(UserNotFoundException.class,
+                () -> userService.linkDiscordAccount(1L, "discord-1", "new-username"));
+
+        verify(userRepository, never()).findByIdForUpdate(any());
     }
 
     // ==== unlinkDiscordAccount ====

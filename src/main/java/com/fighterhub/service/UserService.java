@@ -254,15 +254,24 @@ public class UserService {
 
     // Discordアカウント連携(新規/自分自身への再連携/他Userからの付け替え)。
     //
-    // lock取得順序: 対象Discord IDを現在連携しているUser(いれば)と現在Userの両方を、
-    // ID昇順で固定した順序でPESSIMISTIC_WRITEロックする(findByDiscordIdAndDeleteFlagFalseは
-    // ロックを取得しない事前検索であり、実際の更新は必ずこのID昇順ロックの後に行う)。
-    // 複数のDiscordアカウント連携が同時に実行されても、どのTransactionも常に同じ順序で
-    // ロックを取得するため、旧User/現Userのロック順序が不定になる循環待ち(deadlock)は
-    // 構造的に起こり得ない(Tournament/RecruitmentApplicationの既存ロック順序統一と同じ考え方)。
+    // lock取得順序: 対象Discord IDを現在連携しているUser(いれば。論理削除済みも含む)と
+    // 現在Userの両方を、ID昇順で固定した順序でPESSIMISTIC_WRITEロックする
+    // (findByDiscordIdはロックを取得しない事前検索であり、実際の更新は必ずこのID昇順
+    // ロックの後に行う)。複数のDiscordアカウント連携が同時に実行されても、どのTransactionも
+    // 常に同じ順序でロックを取得するため、旧User/現Userのロック順序が不定になる
+    // 循環待ち(deadlock)は構造的に起こり得ない(Tournament/RecruitmentApplicationの
+    // 既存ロック順序統一と同じ考え方)。
+    //
+    // 既存保持者の検索をdelete_flag=falseのみに限定していると、論理削除後も
+    // discord_idがクリアされずに残っているUser(ユーザー退会機能で想定される状態)を
+    // 見逃し、再連携時にdiscord_idのUNIQUE制約違反を起こす。そのため既存保持者の検索
+    // 自体はfindByDiscordIdで論理削除済みも対象に含め、ロックのみ対象によって
+    // 使い分ける(現在User本人は引き続きfindByIdAndDeleteFlagFalseForUpdateで
+    // 論理削除Userからの連携操作を許可しない。既存保持者は論理削除済みでも
+    // 解除自体は行えるようfindByIdForUpdateでロックする)。
     @Transactional
     public void linkDiscordAccount(Long currentUserId, String discordId, String discordUsername) {
-        Optional<User> existingHolder = userRepository.findByDiscordIdAndDeleteFlagFalse(discordId);
+        Optional<User> existingHolder = userRepository.findByDiscordId(discordId);
 
         SortedSet<Long> idsToLock = new TreeSet<>();
         idsToLock.add(currentUserId);
@@ -270,8 +279,11 @@ public class UserService {
 
         Map<Long, User> lockedUsers = new HashMap<>();
         for (Long id : idsToLock) {
-            User lockedUser = userRepository.findByIdAndDeleteFlagFalseForUpdate(id)
-                    .orElseThrow(() -> new UserNotFoundException(id));
+            User lockedUser = id.equals(currentUserId)
+                    ? userRepository.findByIdAndDeleteFlagFalseForUpdate(id)
+                            .orElseThrow(() -> new UserNotFoundException(id))
+                    : userRepository.findByIdForUpdate(id)
+                            .orElseThrow(() -> new UserNotFoundException(id));
             lockedUsers.put(id, lockedUser);
         }
 
@@ -279,7 +291,7 @@ public class UserService {
             User oldOwner = lockedUsers.get(existingHolder.get().getId());
             // lock取得後に再確認する: この間に別Transactionが既にoldOwnerの連携を
             // 解除・変更している可能性があるため、実際にまだ同じdiscordIdを保持している
-            // 場合のみ解除する。
+            // 場合のみ解除する(oldOwnerが論理削除済みであっても解除自体は行う)。
             if (discordId.equals(oldOwner.getDiscordId())) {
                 oldOwner.unlinkDiscordAccount();
             }
