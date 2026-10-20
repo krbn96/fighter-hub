@@ -1,0 +1,73 @@
+# AWS Lightsail(Ubuntu、2GB RAM)本番デプロイ用。
+# 既存のcompose.yaml(ローカル開発用)はそのまま維持し、本番はこのファイルのみを使う。
+#
+# 起動時は、Compose組み込みの".env"自動読み込み(プロジェクトルートの.envファイル)とは
+# 別に、このファイル専用の秘密情報ファイル".env.prod"を明示的に指定すること
+# (postgresサービスのPOSTGRES_PASSWORD: ${DB_PASSWORD}の変数展開に、
+#  Compose自身が実行時に読み込む変数一覧として.env.prodの内容が必要なため)。
+#
+#   docker compose -f compose.prod.yaml --env-file .env.prod up -d --build
+#
+# HTTPS対応は今回のスコープ外(後続作業で対応する)。外部公開はNginxの80番のみ。
+
+services:
+  postgres:
+    image: postgres:18
+    container_name: fighter-hub-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fighter_hub
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    # hostへは公開しない。同一compose network内のbackendからのみ "postgres:5432" で到達できる。
+    volumes:
+      - fighter-hub-postgres-data-prod:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fighter_hub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Lightsail 2GB RAM環境向けに、過大なメモリ使用を避けるための上限
+    # (PostgreSQL 18のデフォルト設定で十分動作する規模を想定)。
+    mem_limit: 512m
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fighter-hub-backend-prod
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      # application.yaml自体は変更せず、本番Docker環境向けにdatasource host部分のみ上書きする
+      # (既存のローカル開発用compose.yamlと同じ方針)。
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fighter_hub
+      # JVMヒープサイズをmem_limit(下記)に収まる範囲へ明示的に抑える。
+      # ENTRYPOINTは変更せず、JVMが自動的に読み取るJAVA_TOOL_OPTIONSのみで指定する。
+      JAVA_TOOL_OPTIONS: "-Xmx384m -Xss512k"
+    # DB_PASSWORD・JWT_SECRET・DISCORD_CLIENT_ID・DISCORD_CLIENT_SECRET・
+    # DISCORD_REDIRECT_URI・OAUTH_STATE_SECRET・FRONTEND_BASE_URLは、
+    # このファイルへ直書きせず.env.prod(Git管理対象外)から読み込む。
+    env_file:
+      - .env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # backendのportはhostへ公開しない。frontend(Nginx)からDocker network内の
+    # "backend:8080" へreverse proxyするため、host公開は不要(攻撃面も減らせる)。
+    mem_limit: 768m
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fighter-hub-frontend-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    mem_limit: 128m
+
+volumes:
+  fighter-hub-postgres-data-prod:

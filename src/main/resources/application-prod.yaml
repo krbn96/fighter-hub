@@ -8,3 +8,9 @@ spring:
 logging:
   level:
     org.hibernate.SQL: WARN
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
