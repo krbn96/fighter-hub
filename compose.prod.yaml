@@ -8,7 +8,9 @@
 #
 #   docker compose -f compose.prod.yaml --env-file .env.prod up -d --build
 #
-# HTTPS対応は今回のスコープ外(後続作業で対応する)。外部公開はNginxの80番のみ。
+# HTTPS終端はCaddy(ドメイン: fighter-hub.duckdns.org)が行う。外部公開はCaddyの
+# 80/443番のみで、frontend(Nginx)自体はhostへポートを公開しない
+# (compose network内でCaddy -> frontend:80 -> backend:8080という経路になる)。
 
 services:
   postgres:
@@ -63,11 +65,30 @@ services:
       dockerfile: Dockerfile
     container_name: fighter-hub-frontend-prod
     restart: unless-stopped
-    ports:
-      - "80:80"
+    # hostへは公開しない。Caddyからのみ同一compose network内の"frontend:80"へ到達できる
+    # (直接到達できないため、nginx.conf側でX-Forwarded-Protoヘッダーをそのまま
+    #  信用して良い=外部から偽装できない、という前提が成立する)。
     depends_on:
       - backend
     mem_limit: 128m
 
+  caddy:
+    image: caddy:2.9-alpine
+    container_name: fighter-hub-caddy-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data-prod:/data
+      - caddy-config-prod:/config
+    depends_on:
+      - frontend
+    # Caddy自体は非常に軽量(証明書管理とreverse proxyのみ)。
+    mem_limit: 64m
+
 volumes:
   fighter-hub-postgres-data-prod:
+  caddy-data-prod:
+  caddy-config-prod:

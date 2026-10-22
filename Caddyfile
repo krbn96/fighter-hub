@@ -1,0 +1,9 @@
+# AWS Lightsail本番環境のHTTPS終端用設定。
+# fighter-hub.duckdns.orgのDNS AレコードがこのLightsailインスタンスの
+# パブリックIPを指している前提で、Caddyが以下を自動で行う。
+#   - Let's Encryptからの証明書取得・自動更新(ACME HTTP-01challenge、80番を使用)
+#   - HTTP(80番) -> HTTPS(443番)への自動リダイレクト
+#   - frontend:80へのreverse proxy(X-Forwarded-For/Proto/Hostは自動付与される)
+fighter-hub.duckdns.org {
+    reverse_proxy frontend:80
+}
