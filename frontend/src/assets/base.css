@@ -46,6 +46,28 @@
     'Helvetica Neue',
     Arial,
     sans-serif;
+
+  /* Rank colors (Light) - frontend/src/utils/rankColor.tsから参照する。
+     ROOKIEは意図的に既存の--color-text-secondaryを再利用する(「まだ色付けされていない」
+     最低ランクという位置づけのため)。PLATINUM/DIAMOND/MASTERは要件で指定された固定値で、
+     明るさ的にライト/ダーク両テーマで十分なコントラストがあるため単一値のまま定義する。 */
+  --rank-rookie: var(--color-text-secondary);
+  --rank-iron: #6e7980;
+  --rank-bronze: #9a5b32;
+  --rank-silver: #8a94a0;
+  --rank-gold: #b8860b;
+  --rank-platinum: #19b9d2;
+  --rank-diamond: #e66da5;
+  --rank-master: #14a987;
+
+  /* MR帯の色。MASTERバッジ自体の色(--rank-master)からは独立した値とし、
+     緑(1599以下)は既存のsemantic token(--color-success)を再利用する
+     (--rank-masterとは別の変数・別の色味にすることで、バッジの緑とMRの緑を区別できるようにする)。
+     銀/金/ピンクはそれぞれSILVER/GOLD/DIAMONDランクバッジと同じ色味を再利用する。 */
+  --mr-band-green: var(--color-success);
+  --mr-band-silver: var(--rank-silver);
+  --mr-band-gold: var(--rank-gold);
+  --mr-band-pink: var(--rank-diamond);
 }
 
 [data-theme='dark'] {
@@ -63,6 +85,14 @@
   --color-error: #ef4444;
 
   color-scheme: dark;
+
+  /* Rank colors (Dark) - IRON/BRONZE/SILVER/GOLDは暗い背景でも視認できるよう
+     明度を上げた値に差し替える。ROOKIE/PLATINUM/DIAMOND/MASTERはLight側の値を
+     そのまま使って問題ない明るさのため上書きしない。 */
+  --rank-iron: #9aa7ad;
+  --rank-bronze: #cf8b57;
+  --rank-silver: #c3ccd4;
+  --rank-gold: #e3b341;
 }
 
 *,

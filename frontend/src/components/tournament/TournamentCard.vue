@@ -17,12 +17,6 @@ const recruitmentStatus = computed(() => getRecruitmentStatus(props.tournament.r
 
 <template>
   <RouterLink :to="`/tournaments/${tournament.id}`" class="tournament-card">
-    <!-- 将来Tournamentへ画像(imageUrl等)が追加された場合、ここを<img>へ差し替える想定のmedia領域。
-         現時点ではAPIに画像情報が無いため、CSSのみのfallback visualを表示する。 -->
-    <div class="tournament-card__media">
-      <span class="tournament-card__media-fallback">{{ tournament.name.charAt(0) }}</span>
-    </div>
-
     <div class="tournament-card__body">
       <div class="tournament-card__header">
         <h3 class="tournament-card__name">{{ tournament.name }}</h3>
@@ -56,22 +50,6 @@ const recruitmentStatus = computed(() => getRecruitmentStatus(props.tournament.r
 .tournament-card:hover {
   border-color: var(--color-primary);
   background: var(--color-surface-hover);
-}
-
-.tournament-card__media {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 16 / 9;
-  background: linear-gradient(135deg, var(--color-surface-hover), var(--color-bg));
-  border-bottom: 1px solid var(--color-border);
-}
-
-.tournament-card__media-fallback {
-  font-size: 2rem;
-  font-weight: 800;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
 }
 
 .tournament-card__body {

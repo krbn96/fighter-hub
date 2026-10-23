@@ -82,7 +82,26 @@ describe('PlayerProfile', () => {
     expect(mainCard.text()).toContain('RYU')
     expect(mainCard.text()).toContain('MASTER')
     expect(mainCard.text()).toContain('MR 1650')
-    expect(mainCard.find('.player-profile__main-character-visual').exists()).toBe(true)
+    expect(mainCard.find('.player-profile__character-name--main').text()).toBe('RYU')
+  })
+
+  it('MAIN CHARACTERのrankバッジはランク別の色(CSS変数)で表示される', () => {
+    const wrapper = mount(PlayerProfile, {
+      props: { user: sampleUser, characterNames },
+    })
+
+    const rankBadge = wrapper.find('.player-profile__character-rank--main')
+    expect(rankBadge.attributes('style')).toContain('color: var(--rank-master)')
+  })
+
+  it('MAIN CHARACTERのMR数値はMR帯別の色(CSS変数)で表示され、MASTERバッジの色とは異なる変数になる', () => {
+    const wrapper = mount(PlayerProfile, {
+      props: { user: sampleUser, characterNames },
+    })
+
+    const mrValue = wrapper.find('.player-profile__character-mr--main')
+    // sampleUserのmainCharacterはmr: 1650(1600〜1699帯=銀)。
+    expect(mrValue.attributes('style')).toContain('color: var(--mr-band-silver)')
   })
 
   it('2件目以降のcharacterがSUB CHARACTERSとして表示される', () => {
@@ -96,7 +115,53 @@ describe('PlayerProfile', () => {
     expect(subCards).toHaveLength(1)
     expect(subCards[0]?.text()).toContain('CHUN-LI')
     expect(subCards[0]?.text()).toContain('DIAMOND')
-    expect(subCards[0]?.find('.player-profile__sub-character-visual').exists()).toBe(true)
+    expect(subCards[0]?.find('.player-profile__character-name--sub').text()).toBe('CHUN-LI')
+  })
+
+  it('SUB CHARACTERのrankバッジもランク別の色(CSS変数)で表示される', () => {
+    const wrapper = mount(PlayerProfile, {
+      props: { user: sampleUser, characterNames },
+    })
+
+    const subCards = wrapper.findAll('.player-profile__sub-character-card')
+    const rankBadge = subCards[0]?.find('.player-profile__character-rank--sub')
+    // sampleUserの2件目(CHUN-LI)はrank: 'DIAMOND'。
+    expect(rankBadge?.attributes('style')).toContain('color: var(--rank-diamond)')
+  })
+
+  it('MRが各帯の境界値でも正しい色(CSS変数)になる(1599/1600/1699/1700/1799/1800)', () => {
+    const boundaries: { mr: number; colorVar: string }[] = [
+      { mr: 1599, colorVar: 'var(--mr-band-green)' },
+      { mr: 1600, colorVar: 'var(--mr-band-silver)' },
+      { mr: 1699, colorVar: 'var(--mr-band-silver)' },
+      { mr: 1700, colorVar: 'var(--mr-band-gold)' },
+      { mr: 1799, colorVar: 'var(--mr-band-gold)' },
+      { mr: 1800, colorVar: 'var(--mr-band-pink)' },
+    ]
+
+    for (const { mr, colorVar } of boundaries) {
+      const wrapper = mount(PlayerProfile, {
+        props: {
+          user: { ...sampleUser, characters: [{ characterId: 1, rank: 'MASTER', mr }] },
+          characterNames,
+        },
+      })
+
+      const mrValue = wrapper.find('.player-profile__character-mr--main')
+      expect(mrValue.attributes('style')).toContain(`color: ${colorVar}`)
+    }
+  })
+
+  it('未知のrank文字列でもエラーにならずfallback色で表示される', () => {
+    const wrapper = mount(PlayerProfile, {
+      props: {
+        user: { ...sampleUser, characters: [{ characterId: 1, rank: 'LEGEND', mr: null }] },
+        characterNames,
+      },
+    })
+
+    const rankBadge = wrapper.find('.player-profile__character-rank--main')
+    expect(rankBadge.attributes('style')).toContain('color: var(--color-text-secondary)')
   })
 
   it('mrがnullのcharacterはMR行を表示しない', () => {

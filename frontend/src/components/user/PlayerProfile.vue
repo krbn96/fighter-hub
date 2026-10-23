@@ -3,6 +3,7 @@ import { computed, onUnmounted, ref } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import DiscordIcon from '@/components/ui/DiscordIcon.vue'
+import { getMrColorVar, getRankColorVar } from '@/utils/rankColor'
 import type { UserMe, UserPublic } from '@/types/user'
 
 // API通信は行わないpresentational component。
@@ -189,24 +190,22 @@ const subCharacters = computed(() => props.user.characters.slice(1))
         <div class="player-profile__main-character">
           <span class="player-profile__group-label">MAIN CHARACTER</span>
           <BaseCard class="player-profile__main-character-card">
-            <!-- 将来Characterへ画像(imageUrl等)が追加された場合、ここを<img>へ差し替える想定のvisual領域。
-                 現時点ではAPIに画像情報が無いため、CSSのみのfallback visualを表示する(fake imageは使用しない)。 -->
-            <div class="player-profile__main-character-visual" aria-hidden="true">
-              <span class="player-profile__main-character-visual-fallback">{{
-                characterName(mainCharacter.characterId).charAt(0)
-              }}</span>
-            </div>
-            <div class="player-profile__main-character-body">
-              <p class="player-profile__character-name player-profile__character-name--main">
-                {{ characterName(mainCharacter.characterId) }}
-              </p>
-              <p class="player-profile__character-rank">{{ mainCharacter.rank }}</p>
-              <p
+            <p class="player-profile__character-name player-profile__character-name--main">
+              {{ characterName(mainCharacter.characterId) }}
+            </p>
+            <div class="player-profile__main-character-stats">
+              <span
+                class="player-profile__character-rank player-profile__character-rank--main"
+                :style="{ color: getRankColorVar(mainCharacter.rank) }"
+                >{{ mainCharacter.rank }}</span
+              >
+              <span
                 v-if="mainCharacter.rank === 'MASTER' && mainCharacter.mr !== null"
-                class="player-profile__character-mr"
+                class="player-profile__character-mr player-profile__character-mr--main"
+                :style="{ color: getMrColorVar(mainCharacter.mr) }"
               >
                 MR {{ mainCharacter.mr }}
-              </p>
+              </span>
             </div>
           </BaseCard>
         </div>
@@ -219,22 +218,22 @@ const subCharacters = computed(() => props.user.characters.slice(1))
               :key="character.characterId"
               class="player-profile__sub-character-card"
             >
-              <div class="player-profile__sub-character-visual" aria-hidden="true">
-                <span class="player-profile__sub-character-visual-fallback">{{
-                  characterName(character.characterId).charAt(0)
-                }}</span>
-              </div>
-              <div class="player-profile__sub-character-body">
-                <p class="player-profile__character-name">{{
-                  characterName(character.characterId)
-                }}</p>
-                <p class="player-profile__character-rank">{{ character.rank }}</p>
-                <p
+              <p class="player-profile__character-name player-profile__character-name--sub">{{
+                characterName(character.characterId)
+              }}</p>
+              <div class="player-profile__sub-character-stats">
+                <span
+                  class="player-profile__character-rank player-profile__character-rank--sub"
+                  :style="{ color: getRankColorVar(character.rank) }"
+                  >{{ character.rank }}</span
+                >
+                <span
                   v-if="character.rank === 'MASTER' && character.mr !== null"
-                  class="player-profile__character-mr"
+                  class="player-profile__character-mr player-profile__character-mr--sub"
+                  :style="{ color: getMrColorVar(character.mr) }"
                 >
                   MR {{ character.mr }}
-                </p>
+                </span>
               </div>
             </BaseCard>
           </div>
@@ -395,53 +394,63 @@ const subCharacters = computed(() => props.user.characters.slice(1))
 .player-profile__main-character-card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-2);
 }
 
-/* BaseCardの既定padding(var(--space-4))ぶんを負のmarginで打ち消し、
-   visual areaをカード上部いっぱいに配置する(BaseCard自体のpadding指定は変更しない)。 */
-.player-profile__main-character-visual {
+.player-profile__main-character-stats,
+.player-profile__sub-character-stats {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  aspect-ratio: 16 / 9;
-  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) 0;
-  background: linear-gradient(135deg, var(--color-surface-hover), var(--color-bg));
-  border-bottom: 1px solid var(--color-border);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-}
-
-.player-profile__main-character-visual-fallback {
-  font-size: 2.5rem;
-  font-weight: 800;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-}
-
-.player-profile__main-character-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
 .player-profile__character-name {
   margin: 0;
   font-weight: 700;
+  /* 長いキャラクター名でも狭い画面でrank/MRの行と重ならないよう折り返す。 */
+  overflow-wrap: break-word;
 }
 
 .player-profile__character-name--main {
-  font-size: 1.3rem;
+  font-size: 1.75rem;
+  font-weight: 800;
 }
 
+.player-profile__character-name--sub {
+  font-size: 1rem;
+}
+
+/* ランク別の色(文字色)はrankColor.ts(getRankColorVar/getMrColorVar)がinline styleで
+   設定する。ここではStatusBadgeと同じoutlined pillスタイル(背景は塗らず、文字色と
+   枠線(currentColor、つまりrank別の色と同じ)のみ)の形だけを定義する。 */
 .player-profile__character-rank {
+  display: inline-flex;
+  align-items: center;
   margin: 0;
-  color: var(--color-text-secondary);
+  padding: 0.15rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.player-profile__character-rank--main {
   font-size: 0.85rem;
 }
 
 .player-profile__character-mr {
   margin: 0;
-  font-size: 0.85rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.player-profile__character-mr--main {
+  font-size: 1.1rem;
 }
 
 /* 3カラム時に1カラムぶんの幅を占めるよう、常にgrid-template-columns: repeat(3, 1fr)を基準にする
@@ -453,30 +462,6 @@ const subCharacters = computed(() => props.user.characters.slice(1))
 }
 
 .player-profile__sub-character-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.player-profile__sub-character-visual {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  aspect-ratio: 16 / 9;
-  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) 0;
-  background: linear-gradient(135deg, var(--color-surface-hover), var(--color-bg));
-  border-bottom: 1px solid var(--color-border);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-}
-
-.player-profile__sub-character-visual-fallback {
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-}
-
-.player-profile__sub-character-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -493,10 +478,6 @@ const subCharacters = computed(() => props.user.characters.slice(1))
 }
 
 @media (min-width: 1024px) {
-  .player-profile__main-character-visual {
-    aspect-ratio: 16 / 5.5;
-  }
-
   .player-profile__sub-character-grid {
     grid-template-columns: repeat(3, 1fr);
   }
