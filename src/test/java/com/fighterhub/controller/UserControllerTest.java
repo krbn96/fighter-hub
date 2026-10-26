@@ -42,6 +42,7 @@ import com.fighterhub.dto.UserCreateResponse;
 import com.fighterhub.dto.UserMeResponse;
 import com.fighterhub.dto.UserPublicResponse;
 import com.fighterhub.dto.UserUpdateRequest;
+import com.fighterhub.entity.UserRole;
 import com.fighterhub.exception.EmailAlreadyExistsException;
 import com.fighterhub.exception.UserNotFoundException;
 import com.fighterhub.service.UserService;
@@ -342,7 +343,8 @@ class UserControllerTest {
                 "testxid",
                 "testuser",
                 LocalDateTime.of(2026, 1, 1, 0, 0),
-                LocalDateTime.of(2026, 1, 2, 0, 0)
+                LocalDateTime.of(2026, 1, 2, 0, 0),
+                UserRole.USER
         );
 
         when(userService.findMe(1L)).thenReturn(response);
@@ -356,9 +358,35 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.email").value("test@example.com"))
                 .andExpect(jsonPath("$.xId").value("testxid"))
                 .andExpect(jsonPath("$.discordUsername").value("testuser"))
-                .andExpect(jsonPath("$.discordId").doesNotExist());
+                .andExpect(jsonPath("$.discordId").doesNotExist())
+                .andExpect(jsonPath("$.role").value("USER"));
 
         verify(userService, times(1)).findMe(1L);
+    }
+
+    @Test
+    void findMe_roleがADMINのユーザーの場合_レスポンスのroleにADMINが返る() throws Exception {
+
+        Jwt jwt = validJwt("1");
+        when(jwtDecoder.decode("valid-jwt-token")).thenReturn(jwt);
+
+        UserMeResponse response = new UserMeResponse(
+                1L,
+                "Admin User",
+                List.of(),
+                null, null, null,
+                "admin@example.com", null, null,
+                LocalDateTime.of(2026, 1, 1, 0, 0),
+                LocalDateTime.of(2026, 1, 2, 0, 0),
+                UserRole.ADMIN
+        );
+
+        when(userService.findMe(1L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/users/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer valid-jwt-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("ADMIN"));
     }
 
     @Test
@@ -403,7 +431,8 @@ class UserControllerTest {
                 "testxid",
                 "test#1234",
                 LocalDateTime.of(2026, 1, 1, 0, 0),
-                LocalDateTime.of(2026, 1, 2, 0, 0)
+                LocalDateTime.of(2026, 1, 2, 0, 0),
+                UserRole.USER
         );
 
         when(userService.updateUser(eq(1L), any(UserUpdateRequest.class))).thenReturn(response);
@@ -437,7 +466,8 @@ class UserControllerTest {
                 null, null, null,
                 "test@example.com", null, null,
                 LocalDateTime.of(2026, 1, 1, 0, 0),
-                LocalDateTime.of(2026, 1, 2, 0, 0)
+                LocalDateTime.of(2026, 1, 2, 0, 0),
+                UserRole.USER
         );
 
         when(userService.updateUser(eq(1L), any(UserUpdateRequest.class))).thenReturn(response);

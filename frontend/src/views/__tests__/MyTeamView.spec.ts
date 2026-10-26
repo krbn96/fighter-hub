@@ -26,6 +26,7 @@ function createUserMe(id: number): UserMe {
     discordUsername: null,
     createdAt: '2026-09-01T00:00:00',
     updatedAt: '2026-09-01T00:00:00',
+    role: 'USER',
   }
 }
 

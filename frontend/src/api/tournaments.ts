@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { Tournament } from '@/types/tournament'
+import type { Tournament, TournamentCreateRequest, TournamentUpdateRequest } from '@/types/tournament'
 
 export interface FetchTournamentsParams {
   name?: string
@@ -23,4 +23,24 @@ export async function fetchTournaments(params: FetchTournamentsParams = {}): Pro
 export async function fetchTournamentById(id: string): Promise<Tournament> {
   const response = await apiClient.get<Tournament>(`/tournaments/${id}`)
   return response.data
+}
+
+// POST /api/tournaments(ADMIN専用。認可自体はbackendのService層に委ねる)。
+export async function createTournament(request: TournamentCreateRequest): Promise<Tournament> {
+  const response = await apiClient.post<Tournament>('/tournaments', request)
+  return response.data
+}
+
+// PATCH /api/tournaments/{id}(ADMIN専用)。
+export async function updateTournament(
+  id: string,
+  request: TournamentUpdateRequest,
+): Promise<Tournament> {
+  const response = await apiClient.patch<Tournament>(`/tournaments/${id}`, request)
+  return response.data
+}
+
+// DELETE /api/tournaments/{id}(ADMIN専用、論理削除)。
+export async function deleteTournament(id: string): Promise<void> {
+  await apiClient.delete(`/tournaments/${id}`)
 }

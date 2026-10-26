@@ -37,6 +37,7 @@ import com.fighterhub.dto.UserPublicResponse;
 import com.fighterhub.dto.UserUpdateRequest;
 import com.fighterhub.entity.Character;
 import com.fighterhub.entity.User;
+import com.fighterhub.entity.UserRole;
 import com.fighterhub.exception.EmailAlreadyExistsException;
 import com.fighterhub.exception.InvalidRequestException;
 import com.fighterhub.exception.UserNotFoundException;
@@ -859,6 +860,7 @@ class UserServiceTest {
         when(user.getDiscordUsername()).thenReturn(null);
         when(user.getCreatedAt()).thenReturn(createdAt);
         when(user.getUpdatedAt()).thenReturn(updatedAt);
+        when(user.getRole()).thenReturn(UserRole.USER);
 
         when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
 
@@ -887,6 +889,28 @@ class UserServiceTest {
         assertEquals("Test User", response.name());
         assertEquals(createdAt, response.createdAt());
         assertEquals(updatedAt, response.updatedAt());
+        assertEquals(UserRole.USER, response.role());
+    }
+
+    @Test
+    void findMe_roleがADMINのユーザーの場合_UserMeResponseのroleにADMINが返る() {
+
+        User user = mock(User.class);
+        when(user.getId()).thenReturn(1L);
+        when(user.getName()).thenReturn("Admin User");
+        when(user.getCharacter1()).thenReturn(null);
+        when(user.getCharacter2()).thenReturn(null);
+        when(user.getCharacter3()).thenReturn(null);
+        when(user.getCharacter4()).thenReturn(null);
+        when(user.getCreatedAt()).thenReturn(LocalDateTime.of(2026, 1, 1, 0, 0));
+        when(user.getUpdatedAt()).thenReturn(LocalDateTime.of(2026, 1, 2, 0, 0));
+        when(user.getRole()).thenReturn(UserRole.ADMIN);
+
+        when(userRepository.findByIdAndDeleteFlagFalse(1L)).thenReturn(Optional.of(user));
+
+        UserMeResponse response = userService.findMe(1L);
+
+        assertEquals(UserRole.ADMIN, response.role());
     }
 
     @Test

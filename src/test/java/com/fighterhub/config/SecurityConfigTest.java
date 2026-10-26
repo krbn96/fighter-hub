@@ -111,7 +111,7 @@ class SecurityConfigTest {
                 1L, "test-user", java.util.List.of(),
                 null, null, null,
                 "test@example.com", null, null,
-                null, null
+                null, null, com.fighterhub.entity.UserRole.USER
         );
         when(userService.findMe(1L)).thenReturn(response);
 
@@ -187,7 +187,7 @@ class SecurityConfigTest {
                 1L, "test-user", java.util.List.of(),
                 null, null, null,
                 "test@example.com", null, null,
-                null, null
+                null, null, com.fighterhub.entity.UserRole.USER
         );
         when(userService.updateUser(eq(1L), any())).thenReturn(response);
 

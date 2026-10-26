@@ -21,6 +21,9 @@ export interface UserMe {
   discordUsername: string | null
   createdAt: string
   updatedAt: string
+  // ADMIN専用機能(大会管理画面等)の表示・ルート認可判定に使う。
+  // クライアントから変更するAPIは提供されない(読み取り専用)。
+  role: 'USER' | 'ADMIN'
 }
 
 // バックエンドの UserPublicResponse に対応する型。

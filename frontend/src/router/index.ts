@@ -5,6 +5,9 @@ import { useAuthStore } from '@/stores/auth'
 declare module 'vue-router' {
   interface RouteMeta {
     requiresAuth?: boolean
+    // requiresAdmin: trueのルートは、未認証なら/loginへ、ログイン済みだがADMINでなければ
+    // /forbiddenへ遷移させる(requiresAuthを別途付与する必要はない。beforeEach参照)。
+    requiresAdmin?: boolean
   }
 }
 
@@ -97,11 +100,50 @@ const router = createRouter({
       name: 'user-profile',
       component: () => import('../views/UserProfileView.vue'),
     },
+    {
+      path: '/forbidden',
+      name: 'forbidden',
+      component: () => import('../views/ForbiddenView.vue'),
+    },
+    {
+      path: '/admin/tournaments',
+      name: 'admin-tournaments',
+      component: () => import('../views/admin/AdminTournamentListView.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
+      // 静的パスの/admin/tournaments/newは、動的セグメントの/admin/tournaments/:id/editより
+      // 先に定義し、:idとして誤認されないようにする(/teams/my等と同じ方針)。
+      path: '/admin/tournaments/new',
+      name: 'admin-tournament-create',
+      component: () => import('../views/admin/AdminTournamentCreateView.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
+      path: '/admin/tournaments/:id/edit',
+      name: 'admin-tournament-edit',
+      component: () => import('../views/admin/AdminTournamentEditView.vue'),
+      meta: { requiresAdmin: true },
+    },
   ],
 })
 
 router.beforeEach((to) => {
   const authStore = useAuthStore()
+
+  // main.tsがapp.mount()より前にauthStore.restore()の完了を待つため、beforeEachが
+  // 呼ばれる時点(初回アクセス・リロード後の最初のナビゲーションを含む)では認証復元は
+  // 既に完了している。そのためこのガード自体で復元の完了を待つ処理は不要。
+  if (to.meta.requiresAdmin) {
+    if (!authStore.isAuthenticated) {
+      return '/login'
+    }
+    if (authStore.user?.role !== 'ADMIN') {
+      // /forbidden自体はrequiresAuth/requiresAdminを持たないため、無限リダイレクトにはならない。
+      return '/forbidden'
+    }
+    return true
+  }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     return '/login'

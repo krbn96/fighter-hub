@@ -248,7 +248,8 @@ public class UserService {
                 user.getXId(),
                 user.getDiscordUsername(),
                 user.getCreatedAt(),
-                user.getUpdatedAt()
+                user.getUpdatedAt(),
+                user.getRole()
         );
     }
 

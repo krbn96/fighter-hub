@@ -67,6 +67,13 @@ function handleLogout() {
               >My Page</RouterLink
             >
             <button type="button" class="app-header__logout" @click="handleLogout">Logout</button>
+            <RouterLink
+              v-if="authStore.user?.role === 'ADMIN'"
+              to="/admin/tournaments"
+              class="app-header__admin-link"
+              @click="closeMenu"
+              >Admin</RouterLink
+            >
           </template>
 
           <button
@@ -212,6 +219,29 @@ function handleLogout() {
   border-color: var(--color-text-secondary);
 }
 
+/* LOGOUTと同じ四角いアウトラインボタンの形状(padding/border-radius/font)を踏襲し、
+   色のみ既存テーマカラーの赤(--color-primary、BaseButton--primaryと同じ配色)にする。 */
+.app-header__admin-link {
+  background: transparent;
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.app-header__admin-link:hover {
+  background: var(--color-primary);
+  color: white;
+}
+
 .app-header__theme-toggle {
   display: flex;
   align-items: center;
@@ -265,7 +295,8 @@ function handleLogout() {
   }
 
   .app-header__link,
-  .app-header__logout {
+  .app-header__logout,
+  .app-header__admin-link {
     width: 100%;
     padding: var(--space-3) var(--space-4);
     text-align: left;

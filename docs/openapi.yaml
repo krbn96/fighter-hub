@@ -1582,6 +1582,7 @@ components:
         - characters
         - createdAt
         - updatedAt
+        - role
       properties:
         id:
           type: integer
@@ -1645,6 +1646,16 @@ components:
           format: date-time
           description: 更新日時
           example: "2026-09-02T00:00:00"
+        role:
+          $ref: '#/components/schemas/UserRole'
+    UserRole:
+      type: string
+      description: >-
+        ユーザーの権限ロール。クライアントから指定・変更するAPIは提供しない(読み取り専用)。
+        ADMINへの昇格はAPI経由では行わない。
+      enum:
+        - USER
+        - ADMIN
     UserUpdateRequest:
       type: object
       description: >-
