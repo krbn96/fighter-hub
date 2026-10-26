@@ -3,28 +3,30 @@
 FIGHTER HUBの本番環境(AWS Lightsail)の構成図です。実際の`compose.prod.yaml`・`Caddyfile`の設定内容をそのまま反映しています。RDS・ALB・CloudFront・S3等、実際には使用していないAWSサービスは記載していません(単一のLightsailインスタンス上でDocker Composeにより全コンポーネントを稼働させる構成です)。
 
 ```mermaid
-flowchart LR
+flowchart TD
     subgraph Internet["インターネット"]
         Browser["ブラウザ<br/>(Vue 3 SPA)"]
         Discord["discord.com<br/>Discord OAuth"]
     end
 
+    Browser -- "HTTPS (443)" --> Caddy
+
     subgraph Lightsail["AWS Lightsail(Ubuntu) 1台 / Docker Compose"]
         Caddy["Caddy<br/>HTTPS終端・リバースプロキシ<br/>80, 443番のみhost公開"]
-        Nginx["nginx<br/>静的ファイル配信 + /api リバースプロキシ<br/>host非公開(内部networkのみ)"]
-        Backend["Spring Boot<br/>REST API<br/>host非公開(内部networkのみ)"]
-        Postgres["PostgreSQL 18<br/>host非公開(内部networkのみ)"]
         CaddyVolume["Docker Volume<br/>caddy-data / caddy-config"]
+        Caddy -. "証明書・ACME状態を永続化" .-> CaddyVolume
+
+        Caddy -- "HTTP(内部network)" --> Nginx
+        Nginx["nginx<br/>静的ファイル配信 + /api リバースプロキシ<br/>host非公開(内部networkのみ)"]
+
+        Nginx -- "HTTP(内部network)<br/>/api/* をproxy" --> Backend
+        Backend["Spring Boot<br/>REST API<br/>host非公開(内部networkのみ)"]
+
+        Backend -- "JDBC(内部network)" --> Postgres
+        Postgres["PostgreSQL 18<br/>host非公開(内部networkのみ)"]
         PostgresVolume["Docker Volume<br/>postgres-data"]
+        Postgres -. "データを永続化" .-> PostgresVolume
     end
-
-    Browser -- "HTTPS (443)" --> Caddy
-    Caddy -- "HTTP(内部network)" --> Nginx
-    Nginx -- "HTTP(内部network)<br/>/api/* をproxy" --> Backend
-    Backend -- "JDBC(内部network)" --> Postgres
-
-    Caddy -. "証明書・ACME状態を永続化" .-> CaddyVolume
-    Postgres -. "データを永続化" .-> PostgresVolume
 
     Browser -- "HTTPS(Discord認可画面へ遷移)" --> Discord
     Backend -- "HTTPS(認可コード→トークン交換、ユーザー情報取得)" --> Discord
