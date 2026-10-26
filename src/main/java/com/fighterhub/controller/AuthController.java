@@ -1,5 +1,6 @@
 package com.fighterhub.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 import org.springframework.web.bind.annotation.PostMapping;
@@ -53,10 +54,20 @@ public class AuthController {
             content = @Content(
                 schema = @Schema(implementation = ErrorResponse.class)
             )
+        ),
+        @ApiResponse(
+            responseCode = "429",
+            description = "ログイン試行回数の上限に達した(IP単位またはIP+email単位)。"
+                + "Retry-Afterヘッダーに解除までの残り秒数を返す。",
+            content = @Content(
+                schema = @Schema(implementation = ErrorResponse.class)
+            )
         )
     })
     @PostMapping("/login")
-    public AuthLoginResponse login(@Valid @RequestBody AuthLoginRequest request) {
-        return authService.login(request);
+    public AuthLoginResponse login(
+            @Valid @RequestBody AuthLoginRequest request,
+            HttpServletRequest httpRequest) {
+        return authService.login(request, httpRequest.getRemoteAddr());
     }
 }

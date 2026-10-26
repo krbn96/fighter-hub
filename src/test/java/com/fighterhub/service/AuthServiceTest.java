@@ -21,11 +21,15 @@ import com.fighterhub.dto.AuthLoginRequest;
 import com.fighterhub.dto.AuthLoginResponse;
 import com.fighterhub.entity.User;
 import com.fighterhub.exception.AuthenticationFailedException;
+import com.fighterhub.exception.TooManyLoginAttemptsException;
 import com.fighterhub.repository.UserRepository;
 import com.fighterhub.security.JwtProvider;
+import com.fighterhub.security.LoginRateLimiter;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
+
+    private static final String CLIENT_IP = "203.0.113.5";
 
     @Mock
     private UserRepository userRepository;
@@ -36,6 +40,9 @@ class AuthServiceTest {
     @Mock
     private JwtProvider jwtProvider;
 
+    @Mock
+    private LoginRateLimiter loginRateLimiter;
+
     @InjectMocks
     private AuthService authService;
 
@@ -43,6 +50,9 @@ class AuthServiceTest {
     void login_正しいemailとpasswordの場合_AccessTokenを含むレスポンスを返す() {
 
         AuthLoginRequest request = new AuthLoginRequest("user@example.com", "password123");
+
+        when(loginRateLimiter.checkAllowed(CLIENT_IP, "user@example.com"))
+                .thenReturn(new LoginRateLimiter.Decision(true, 0));
 
         User user = mock(User.class);
         when(user.getId()).thenReturn(1L);
@@ -53,36 +63,45 @@ class AuthServiceTest {
         when(passwordEncoder.matches("password123", "hashed-password")).thenReturn(true);
         when(jwtProvider.generateToken(1L)).thenReturn("generated-token");
 
-        AuthLoginResponse result = authService.login(request);
+        AuthLoginResponse result = authService.login(request, CLIENT_IP);
 
         assertEquals("generated-token", result.accessToken());
 
         verify(userRepository).findByEmailAndDeleteFlagFalse("user@example.com");
         verify(passwordEncoder).matches("password123", "hashed-password");
         verify(jwtProvider).generateToken(1L);
+        verify(loginRateLimiter).recordSuccess(CLIENT_IP, "user@example.com");
+        verify(loginRateLimiter, never()).recordFailure(any(), any());
     }
 
     @Test
-    void login_emailが存在しない場合_AuthenticationFailedExceptionを投げJwtProviderは呼ばれない() {
+    void login_emailが存在しない場合_AuthenticationFailedExceptionを投げJwtProviderは呼ばれず失敗が記録される() {
 
         AuthLoginRequest request = new AuthLoginRequest("nouser@example.com", "password123");
 
+        when(loginRateLimiter.checkAllowed(CLIENT_IP, "nouser@example.com"))
+                .thenReturn(new LoginRateLimiter.Decision(true, 0));
         when(userRepository.findByEmailAndDeleteFlagFalse("nouser@example.com"))
                 .thenReturn(Optional.empty());
 
         AuthenticationFailedException exception = assertThrows(
                 AuthenticationFailedException.class,
-                () -> authService.login(request));
+                () -> authService.login(request, CLIENT_IP));
 
         assertEquals("Invalid email or password.", exception.getMessage());
         verify(passwordEncoder, never()).matches(any(), any());
         verify(jwtProvider, never()).generateToken(any());
+        verify(loginRateLimiter).recordFailure(CLIENT_IP, "nouser@example.com");
+        verify(loginRateLimiter, never()).recordSuccess(any(), any());
     }
 
     @Test
-    void login_passwordが一致しない場合_AuthenticationFailedExceptionを投げJwtProviderは呼ばれない() {
+    void login_passwordが一致しない場合_AuthenticationFailedExceptionを投げJwtProviderは呼ばれず失敗が記録される() {
 
         AuthLoginRequest request = new AuthLoginRequest("user@example.com", "wrong-password");
+
+        when(loginRateLimiter.checkAllowed(CLIENT_IP, "user@example.com"))
+                .thenReturn(new LoginRateLimiter.Decision(true, 0));
 
         User user = mock(User.class);
         when(user.getPasswordHash()).thenReturn("hashed-password");
@@ -93,17 +112,21 @@ class AuthServiceTest {
 
         AuthenticationFailedException exception = assertThrows(
                 AuthenticationFailedException.class,
-                () -> authService.login(request));
+                () -> authService.login(request, CLIENT_IP));
 
         assertEquals("Invalid email or password.", exception.getMessage());
         verify(passwordEncoder).matches("wrong-password", "hashed-password");
         verify(jwtProvider, never()).generateToken(any());
+        verify(loginRateLimiter).recordFailure(CLIENT_IP, "user@example.com");
     }
 
     @Test
-    void login_passwordHashがnullの場合_matchesもJwtProviderも呼ばずAuthenticationFailedExceptionを投げる() {
+    void login_passwordHashがnullの場合_matchesもJwtProviderも呼ばずAuthenticationFailedExceptionを投げ失敗が記録される() {
 
         AuthLoginRequest request = new AuthLoginRequest("user@example.com", "password123");
+
+        when(loginRateLimiter.checkAllowed(CLIENT_IP, "user@example.com"))
+                .thenReturn(new LoginRateLimiter.Decision(true, 0));
 
         User user = mock(User.class);
         when(user.getPasswordHash()).thenReturn(null);
@@ -113,10 +136,31 @@ class AuthServiceTest {
 
         AuthenticationFailedException exception = assertThrows(
                 AuthenticationFailedException.class,
-                () -> authService.login(request));
+                () -> authService.login(request, CLIENT_IP));
 
         assertEquals("Invalid email or password.", exception.getMessage());
         verify(passwordEncoder, never()).matches(any(), any());
         verify(jwtProvider, never()).generateToken(any());
+        verify(loginRateLimiter).recordFailure(CLIENT_IP, "user@example.com");
+    }
+
+    @Test
+    void login_レート制限で拒否されている場合_TooManyLoginAttemptsExceptionを投げDBアクセスもパスワード照合も行わない() {
+
+        AuthLoginRequest request = new AuthLoginRequest("user@example.com", "password123");
+
+        when(loginRateLimiter.checkAllowed(CLIENT_IP, "user@example.com"))
+                .thenReturn(new LoginRateLimiter.Decision(false, 123));
+
+        TooManyLoginAttemptsException exception = assertThrows(
+                TooManyLoginAttemptsException.class,
+                () -> authService.login(request, CLIENT_IP));
+
+        assertEquals(123, exception.getRetryAfterSeconds());
+        verify(userRepository, never()).findByEmailAndDeleteFlagFalse(any());
+        verify(passwordEncoder, never()).matches(any(), any());
+        verify(jwtProvider, never()).generateToken(any());
+        verify(loginRateLimiter, never()).recordFailure(any(), any());
+        verify(loginRateLimiter, never()).recordSuccess(any(), any());
     }
 }

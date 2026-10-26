@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -23,6 +24,7 @@ import com.fighterhub.config.SecurityConfig;
 import com.fighterhub.dto.AuthLoginRequest;
 import com.fighterhub.dto.AuthLoginResponse;
 import com.fighterhub.exception.AuthenticationFailedException;
+import com.fighterhub.exception.TooManyLoginAttemptsException;
 import com.fighterhub.service.AuthService;
 
 @WebMvcTest(AuthController.class)
@@ -50,7 +52,7 @@ class AuthControllerTest {
                 }
                 """;
 
-        when(authService.login(any(AuthLoginRequest.class)))
+        when(authService.login(any(AuthLoginRequest.class), any()))
                 .thenReturn(new AuthLoginResponse("generated-token"));
 
         mockMvc.perform(post("/api/auth/login")
@@ -60,7 +62,7 @@ class AuthControllerTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.accessToken").value("generated-token"));
 
-        verify(authService, times(1)).login(any(AuthLoginRequest.class));
+        verify(authService, times(1)).login(any(AuthLoginRequest.class), any());
     }
 
     @Test
@@ -73,7 +75,7 @@ class AuthControllerTest {
                 }
                 """;
 
-        when(authService.login(any(AuthLoginRequest.class)))
+        when(authService.login(any(AuthLoginRequest.class), any()))
                 .thenThrow(new AuthenticationFailedException());
 
         mockMvc.perform(post("/api/auth/login")
@@ -83,6 +85,29 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.error").value("Unauthorized"))
                 .andExpect(jsonPath("$.message").value("Invalid email or password."))
+                .andExpect(jsonPath("$.path").value("/api/auth/login"));
+    }
+
+    @Test
+    void login_AuthServiceがレート制限超過をthrowした場合_429とRetryAfterヘッダーを返す() throws Exception {
+
+        String requestBody = """
+                {
+                  "email": "test@example.com",
+                  "password": "wrong-password"
+                }
+                """;
+
+        when(authService.login(any(AuthLoginRequest.class), any()))
+                .thenThrow(new TooManyLoginAttemptsException(123));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "123"))
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.message").value("Too many login attempts. Please try again later."))
                 .andExpect(jsonPath("$.path").value("/api/auth/login"));
     }
 
@@ -101,7 +126,7 @@ class AuthControllerTest {
                         .content(requestBody))
                 .andExpect(status().isBadRequest());
 
-        verify(authService, never()).login(any());
+        verify(authService, never()).login(any(), any());
     }
 
     @Test
@@ -119,7 +144,7 @@ class AuthControllerTest {
                         .content(requestBody))
                 .andExpect(status().isBadRequest());
 
-        verify(authService, never()).login(any());
+        verify(authService, never()).login(any(), any());
     }
 
     @Test
@@ -137,6 +162,6 @@ class AuthControllerTest {
                         .content(requestBody))
                 .andExpect(status().isBadRequest());
 
-        verify(authService, never()).login(any());
+        verify(authService, never()).login(any(), any());
     }
 }

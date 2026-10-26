@@ -98,13 +98,14 @@ class UserSoftDeletePersistenceTest {
 
         // ソフトデリート前は、同じemail/passwordで正常にログインできることを確認する。
         // これにより、後続の失敗が「passwordが誤っているから」ではないことを担保する。
-        assertDoesNotThrow(() -> authService.login(loginRequest));
+        String clientIp = "203.0.113.200";
+        assertDoesNotThrow(() -> authService.login(loginRequest, clientIp));
 
         softDelete(createdUserId);
 
         assertThrows(
                 AuthenticationFailedException.class,
-                () -> authService.login(loginRequest));
+                () -> authService.login(loginRequest, clientIp));
     }
 
     @Test

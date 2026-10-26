@@ -1,4 +1,13 @@
 
+server:
+  # backendに直接接続できるのはnginxコンテナのみ(host非公開)で、その手前のCaddyは
+  # trusted_proxiesを設定していないため外部クライアントが送るX-Forwarded-Forを無視し、
+  # 自身が観測した実クライアントIPで設定する(前提の詳細はclaude-report.md参照)。
+  # internal-proxiesは明示的に上書きしない(Tomcatの既定値=プライベートIPレンジ全体の
+  # 正規表現のままにし、Dockerが割り振るIP/サブネットの変化に追従させる)。
+  # ローカル開発用のapplication.yamlには追加しない(開発環境はCaddyを経由しないため)。
+  forward-headers-strategy: native
+
 spring:
   jpa:
     hibernate:
