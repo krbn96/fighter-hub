@@ -251,6 +251,27 @@ describe('TeamDetailView', () => {
     expect(wrapper.text()).toContain('このチームに参加申請する')
   })
 
+  it('参加申請メッセージのtextareaにmaxlength=1000が設定され、現在の文字数 / 1000が表示される', async () => {
+    const authStore = useAuthStore()
+    authStore.token = 'dummy-token'
+    authStore.user = createUserMe(sampleTeam.ownerId + 999)
+
+    vi.mocked(fetchTeamById).mockResolvedValue(sampleTeam)
+
+    const wrapper = mount(TeamDetailView, {
+      global: { stubs: { RouterLink: RouterLinkStub } },
+    })
+    await flushPromises()
+
+    const textarea = wrapper.find('#applicationMessage')
+    expect(textarea.attributes('maxlength')).toBe('1000')
+    expect(wrapper.text()).toContain('0 / 1000')
+
+    await textarea.setValue('よろしくお願いします')
+
+    expect(wrapper.text()).toContain('10 / 1000')
+  })
+
   it('既にこのTeamのmemberの場合、応募フォームの代わりに状態説明が表示される', async () => {
     const authStore = useAuthStore()
     authStore.token = 'dummy-token'

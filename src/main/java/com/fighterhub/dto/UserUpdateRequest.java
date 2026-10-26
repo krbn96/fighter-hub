@@ -23,6 +23,7 @@ public record UserUpdateRequest(
 
     JsonNullable<LocalTime> playTimeEnd,
 
+    @Size(max = 1000)
     JsonNullable<String> message
 ) {
     public UserUpdateRequest {

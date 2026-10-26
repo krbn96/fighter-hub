@@ -81,6 +81,18 @@ describe('RegisterView', () => {
     expect(wrapper.text()).toContain('Ken')
   })
 
+  it('MESSAGEのtextareaにmaxlength=1000が設定され、現在の文字数 / 1000が表示される', async () => {
+    const wrapper = await mountReady()
+
+    const textarea = wrapper.find('#register-message')
+    expect(textarea.attributes('maxlength')).toBe('1000')
+    expect(wrapper.text()).toContain('0 / 1000')
+
+    await textarea.setValue('よろしくお願いします')
+
+    expect(wrapper.text()).toContain('10 / 1000')
+  })
+
   it('MAIN CHARACTERを選択できる', async () => {
     const wrapper = await mountReady()
 

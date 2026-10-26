@@ -253,6 +253,24 @@ class UserUpdateRequestTest {
         assertTrue(newValidator().validate(request).isEmpty());
     }
 
+    @Test
+    void validate_messageが1000文字の場合_違反なし() {
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(), validCharacters(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.of("a".repeat(1000)));
+
+        assertTrue(newValidator().validate(request).isEmpty());
+    }
+
+    @Test
+    void validate_messageが1001文字の場合_違反になる() {
+        UserUpdateRequest request = new UserUpdateRequest(
+                JsonNullable.undefined(), validCharacters(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.of("a".repeat(1001)));
+
+        assertFalse(newValidator().validate(request).isEmpty());
+    }
+
     // ==== ヘルパー ====
 
     private static JsonNullable<List<UserCharacterRequest>> validCharacters() {

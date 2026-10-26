@@ -21,6 +21,7 @@ public record TeamUpdateRequest(
     // 未指定(undefined)は「変更しない」を表す。リスト自体には@NotNullを付けない。
     JsonNullable<List<@NotNull @Positive Long>> characterRequirements,
 
+    @Size(max = 1000)
     JsonNullable<String> recruitmentMessage
 ) {
     public TeamUpdateRequest {

@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { RANK_OPTIONS } from '@/constants/ranks'
+import { MESSAGE_MAX_LENGTH } from '@/constants/validation'
 import type { Character } from '@/types/character'
 import type { UserCharacter, UserMe, UserUpdateRequest } from '@/types/user'
 
@@ -162,7 +163,13 @@ function handleSubmit() {
 
       <div class="profile-edit-form__field">
         <label class="profile-edit-form__field-label" for="profile-edit-message">MESSAGE</label>
-        <textarea id="profile-edit-message" v-model="message" rows="4"></textarea>
+        <textarea
+          id="profile-edit-message"
+          v-model="message"
+          rows="4"
+          :maxlength="MESSAGE_MAX_LENGTH"
+        ></textarea>
+        <p class="profile-edit-form__char-count">{{ message.length }} / {{ MESSAGE_MAX_LENGTH }}</p>
       </div>
     </BaseCard>
 
@@ -427,6 +434,13 @@ function handleSubmit() {
 
 .profile-edit-form textarea {
   resize: vertical;
+}
+
+.profile-edit-form__char-count {
+  margin: var(--space-1) 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  text-align: right;
 }
 
 .profile-edit-form__playtime {

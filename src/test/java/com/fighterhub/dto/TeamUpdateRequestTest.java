@@ -214,6 +214,24 @@ class TeamUpdateRequestTest {
         assertTrue(newValidator().validate(request).isEmpty());
     }
 
+    @Test
+    void validate_recruitmentMessageが1000文字の場合_違反なし() {
+        TeamUpdateRequest request = new TeamUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.of("a".repeat(1000)));
+
+        assertTrue(newValidator().validate(request).isEmpty());
+    }
+
+    @Test
+    void validate_recruitmentMessageが1001文字の場合_違反になる() {
+        TeamUpdateRequest request = new TeamUpdateRequest(
+                JsonNullable.undefined(), JsonNullable.undefined(),
+                JsonNullable.undefined(), JsonNullable.of("a".repeat(1001)));
+
+        assertFalse(newValidator().validate(request).isEmpty());
+    }
+
     // ==== ヘルパー ====
 
     private static TeamUpdateRequest withName(JsonNullable<String> name) {

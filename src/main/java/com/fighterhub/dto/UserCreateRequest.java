@@ -30,6 +30,7 @@ public record UserCreateRequest(
 
     LocalTime playTimeEnd,
 
+    @Size(max = 1000)
     String message
 ) {
 }

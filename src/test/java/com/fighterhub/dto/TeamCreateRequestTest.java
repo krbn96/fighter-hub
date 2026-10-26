@@ -92,6 +92,22 @@ class TeamCreateRequestTest {
     }
 
     @Test
+    void validate_recruitmentMessageが1000文字の場合_違反なし() {
+        TeamCreateRequest request = new TeamCreateRequest(
+                1L, "Team Ryu", null, null, "a".repeat(1000));
+
+        assertTrue(newValidator().validate(request).isEmpty());
+    }
+
+    @Test
+    void validate_recruitmentMessageが1001文字の場合_違反になる() {
+        TeamCreateRequest request = new TeamCreateRequest(
+                1L, "Team Ryu", null, null, "a".repeat(1001));
+
+        assertFalse(newValidator().validate(request).isEmpty());
+    }
+
+    @Test
     void validate_characterRequirementsにnull要素が含まれる場合_違反になる() {
         TeamCreateRequest request = withCharacterRequirements(Arrays.asList(1L, null));
 

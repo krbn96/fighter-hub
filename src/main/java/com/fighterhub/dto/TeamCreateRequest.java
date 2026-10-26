@@ -22,6 +22,7 @@ public record TeamCreateRequest(
     // リスト自体には@NotNullを付けない。要素はnull不可・正のIDのみ許可する。
     List<@NotNull @Positive Long> characterRequirements,
 
+    @Size(max = 1000)
     String recruitmentMessage
 ) {
 }

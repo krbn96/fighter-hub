@@ -5,6 +5,7 @@ import axios from 'axios'
 import { createUser } from '@/api/user'
 import { fetchCharacters } from '@/api/characters'
 import { RANK_OPTIONS } from '@/constants/ranks'
+import { MESSAGE_MAX_LENGTH } from '@/constants/validation'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import LoadingState from '@/components/ui/LoadingState.vue'
@@ -454,7 +455,13 @@ async function handleSubmit() {
 
           <div class="register-view__field">
             <label class="register-view__label" for="register-message">MESSAGE</label>
-            <textarea id="register-message" v-model="message" rows="4"></textarea>
+            <textarea
+              id="register-message"
+              v-model="message"
+              rows="4"
+              :maxlength="MESSAGE_MAX_LENGTH"
+            ></textarea>
+            <p class="register-view__char-count">{{ message.length }} / {{ MESSAGE_MAX_LENGTH }}</p>
           </div>
         </BaseCard>
 
@@ -558,6 +565,13 @@ async function handleSubmit() {
 
 .register-view textarea {
   resize: vertical;
+}
+
+.register-view__char-count {
+  margin: var(--space-1) 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  text-align: right;
 }
 
 .register-view__playtime {

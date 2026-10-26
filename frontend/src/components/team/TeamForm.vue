@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { RANK_OPTIONS } from '@/constants/ranks'
+import { MESSAGE_MAX_LENGTH } from '@/constants/validation'
 import type { Character } from '@/types/character'
 import type { TeamFormValues } from '@/types/team'
 
@@ -86,7 +87,13 @@ function handleSubmit() {
 
       <div class="team-form__field">
         <label class="team-form__label" for="team-form-message">RECRUITMENT MESSAGE</label>
-        <textarea id="team-form-message" v-model="recruitmentMessage" rows="4"></textarea>
+        <textarea
+          id="team-form-message"
+          v-model="recruitmentMessage"
+          rows="4"
+          :maxlength="MESSAGE_MAX_LENGTH"
+        ></textarea>
+        <p class="team-form__char-count">{{ recruitmentMessage.length }} / {{ MESSAGE_MAX_LENGTH }}</p>
       </div>
 
       <p v-if="error" class="team-form__error" role="alert">{{ error }}</p>
@@ -149,6 +156,13 @@ function handleSubmit() {
 
 .team-form textarea {
   resize: vertical;
+}
+
+.team-form__char-count {
+  margin: var(--space-1) 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  text-align: right;
 }
 
 .team-form__character-grid {

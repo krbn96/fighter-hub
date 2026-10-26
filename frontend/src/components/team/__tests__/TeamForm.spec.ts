@@ -40,6 +40,23 @@ describe('TeamForm', () => {
     expect((checkboxes[1]!.element as HTMLInputElement).checked).toBe(false)
   })
 
+  it('RECRUITMENT MESSAGEのtextareaにmaxlength=1000が設定され、現在の文字数 / 1000が表示される', () => {
+    const wrapper = mount(TeamForm, {
+      props: {
+        initialValues,
+        characters: sampleCharacters,
+        submitting: false,
+        submitLabel: 'CREATE TEAM',
+        submittingLabel: 'CREATING...',
+      },
+    })
+
+    const textarea = wrapper.find('#team-form-message')
+    expect(textarea.attributes('maxlength')).toBe('1000')
+    // initialValues.recruitmentMessage('誰でも歓迎です')は7文字。
+    expect(wrapper.text()).toContain('7 / 1000')
+  })
+
   it('initialValuesを省略した場合は空のCreate用初期値になる', () => {
     const wrapper = mount(TeamForm, {
       props: {

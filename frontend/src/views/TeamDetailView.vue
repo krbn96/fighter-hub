@@ -8,6 +8,7 @@ import { fetchTournamentById } from '@/api/tournaments'
 import { createApplication, fetchMyApplications } from '@/api/applications'
 import { useAuthStore } from '@/stores/auth'
 import { isRecruiting } from '@/utils/recruitmentStatus'
+import { MESSAGE_MAX_LENGTH } from '@/constants/validation'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseCard from '@/components/ui/BaseCard.vue'
 import LoadingState from '@/components/ui/LoadingState.vue'
@@ -266,7 +267,14 @@ async function handleApply() {
               <h2>このチームに参加申請する</h2>
               <div class="team-detail-view__form-field">
                 <label for="applicationMessage">参加申請メッセージ</label>
-                <textarea id="applicationMessage" v-model="applicationMessage"></textarea>
+                <textarea
+                  id="applicationMessage"
+                  v-model="applicationMessage"
+                  :maxlength="MESSAGE_MAX_LENGTH"
+                ></textarea>
+                <p class="team-detail-view__char-count">
+                  {{ applicationMessage.length }} / {{ MESSAGE_MAX_LENGTH }}
+                </p>
               </div>
               <p v-if="applicationError" role="alert">{{ applicationError }}</p>
               <BaseButton type="submit" :disabled="applying">
@@ -442,6 +450,13 @@ async function handleApply() {
   border-radius: var(--radius-sm);
   background: var(--color-bg);
   color: var(--color-text);
+}
+
+.team-detail-view__char-count {
+  margin: var(--space-1) 0 0;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  text-align: right;
 }
 
 .team-detail-view__back {

@@ -57,6 +57,17 @@ describe('ProfileEditForm', () => {
     }
   })
 
+  it('MESSAGEのtextareaにmaxlength=1000が設定され、現在の文字数 / 1000が表示される', () => {
+    const wrapper = mount(ProfileEditForm, {
+      props: { user: sampleUser, characters: sampleCharacters, saving: false, error: '' },
+    })
+
+    const textarea = wrapper.find('#profile-edit-message')
+    expect(textarea.attributes('maxlength')).toBe('1000')
+    // sampleUser.messageは'よろしくお願いします'(10文字)。
+    expect(wrapper.text()).toContain('10 / 1000')
+  })
+
   it('authStore.user相当のuser propから初期値が設定される', () => {
     const wrapper = mount(ProfileEditForm, {
       props: { user: sampleUser, characters: sampleCharacters, saving: false, error: '' },
