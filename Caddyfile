@@ -5,5 +5,34 @@
 #   - HTTP(80番) -> HTTPS(443番)への自動リダイレクト
 #   - frontend:80へのreverse proxy(X-Forwarded-For/Proto/Hostは自動付与される)
 fighter-hub.duckdns.org {
+    # セキュリティヘッダー(全レスポンス共通。/api/*のJSON応答にも同じヘッダーを付与するが、
+    # 無害なため特定パスへのmatcherでの絞り込みは行わない)。
+    #
+    # HSTSはmax-age=31536000(1年)のみとし、includeSubDomains/preloadは付けない
+    # (サブドメイン運用やpreload登録の予定が無く、将来HTTP運用へ戻す可能性を
+    #  不必要に塞がないため)。
+    #
+    # CSPはfrontend/index.html・Vueのbuild出力(dist/index.html)・axios通信先を調査した結果、
+    # 外部ドメインへのscript/style/img/connect一切無し(全てbuild後は/assets配下の同一オリジン
+    # ファイルのみ)であることを確認済みのため、スクリプト・接続先は'self'のみに制限する
+    # 強いポリシーをenforce(Report-Onlyではない)で適用する。
+    # style-srcにのみ'unsafe-inline'を許可しているのは、PlayerProfile.vue(MAIN/SUB CHARACTERの
+    # ランク・MR表示)が:styleでインラインstyle属性(文字色)を描画しているため
+    # (調査により確認済みの既存機能。frontend側の修正は本タスクの範囲外とし、既存機能を
+    #  壊さないことを優先した)。script-srcには'unsafe-inline'/'unsafe-eval'を一切許可しない
+    # (安易な許可を避けるため。Vue 3本番buildはテンプレートをbuild時に事前コンパイルし、
+    #  実行時にeval/new Functionを使わない)。
+    # Discordアカウント連携は、frontendがJSON(Authorization URL)を取得した後に
+    # window.location.assignでdiscord.comへ全画面遷移するのみで、fetch/XHR等のsubresource
+    # 読み込みは発生しないため、CSPのいずれのディレクティブにもdiscord.comを追加する必要はない
+    # (ページ遷移はCSPのfetch系ディレクティブの対象外)。
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+    }
+
     reverse_proxy frontend:80
 }
