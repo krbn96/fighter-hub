@@ -17,6 +17,10 @@ RUN npm run build
 FROM nginx:alpine AS runtime
 
 COPY --from=builder /app/dist /usr/share/nginx/html
+# builder stage側のファイル権限(例: 600)がそのままCOPYされると、nginxのworker
+# process(nginx:alpineの既定でnginxユーザーで動作)がファイルを読めず403になる。
+# 所有者(root)・nginxの実行ユーザー構成は変更せず、権限のみ読み取り可能にする。
+RUN chmod -R a+rX /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
