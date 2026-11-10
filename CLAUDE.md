@@ -38,7 +38,8 @@ Controller -> Service -> Repository -> PostgreSQL
 
 - API仕様を推測して変更しない
 - DB仕様を推測して変更しない
-- docs/openapi.yamlは未実装APIの設計資料として参照する
+- docs/openapi.yamlは実装済みAPIの記録とする。Java実装（Controller/DTO/Validation）を正とし、未実装・将来予定のAPIは記載しない
+- API実装・変更時はdocs/openapi.yamlをJava実装に同期する
 - 実装済みAPIについては実装コードを優先する
 - 仕様が曖昧または矛盾している場合は、勝手に判断せず質問する
 
@@ -128,3 +129,6 @@ POST /usersではemailを必須とする。
 - 実装後は変更したファイルと内容をまとめて報告する
 - 実装後はテスト結果を報告する
 - セキュリティ関連の重要な設計変更は実装前に説明する
+- .env / .env.prod / .env.local など秘密情報を含むファイルは読み取り・出力しない（.env.example / .env.prod.exampleは参照可）。秘密鍵・証明書・トークンも同様
+- 調査・実装の結果は、プロジェクトルートのclaude-report.mdの先頭に新しい章として追記する（目的、調査/変更内容、変更ファイル、テストと結果、git status、残課題）。秘密情報の実値は記載しない
+- claude-report.mdが肥大化した場合は、古い章をreports/archive/へ移す（削除しない）

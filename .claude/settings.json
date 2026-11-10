@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(git reset --hard:*)"
+    ],
+    "deny": [
+      "Read(./.env)", "Edit(./.env)",
+      "Read(./.env.prod)", "Edit(./.env.prod)",
+      "Read(./.env.local)", "Edit(./.env.local)",
+      "Read(./frontend/.env)", "Edit(./frontend/.env)",
+      "Read(./frontend/.env.local)", "Edit(./frontend/.env.local)",
+      "Read(**/*.pem)", "Read(**/*.key)", "Read(**/*.p12)",
+      "Bash(cat .env:*)", "Bash(cat .env.prod:*)"
+    ]
+  }
+}
