@@ -34,6 +34,8 @@ build/
 
 ### Claude Code ###
 claude-report.md
+reports/
+.claude/settings.local.json
 
 ### Environment / secrets ###
 # DB_PASSWORD/JWT_SECRET等の実値を含むファイルはGit管理しない。
